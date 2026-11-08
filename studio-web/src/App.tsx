@@ -3,6 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { WorkflowStudioView } from "./components/workflow/WorkflowStudioView";
 import { SchemaToolView } from "./components/tools/SchemaToolView";
 import { AssetLibraryView } from "./components/tools/AssetLibraryView";
+import { HomeDashboardView } from "./components/home/HomeDashboardView";
 import { MODULES_REGISTRY } from "./config/modulesRegistry";
 import type { SubTool } from "./config/modulesRegistry";
 import type { WorkbenchSeed } from "./services/api";
@@ -28,6 +29,25 @@ export function App() {
   };
 
   const renderContent = () => {
+    // Home Module renders Home Dashboard
+    if (currentModuleId === "01-home" && !activeTool) {
+      return (
+        <HomeDashboardView
+          onNavigate={(modId, tId) => {
+            setCurrentModuleId(modId);
+            if (tId) {
+              const targetMod = MODULES_REGISTRY.find((m) => m.id === modId);
+              const tool = targetMod?.tools.find((t) => t.id === tId) || null;
+              setActiveTool(tool);
+            } else {
+              setActiveTool(null);
+            }
+          }}
+          onSendToWorkbench={handleSendToWorkbench}
+        />
+      );
+    }
+
     // Asset Library Module directly opens AssetLibraryView
     if (currentModuleId === "09-asset-library") {
       return <AssetLibraryView onSendToWorkbench={handleSendToWorkbench} />;
