@@ -20,7 +20,7 @@ dist/
 *.log
 *.sqlite
 *.sqlite3
-storage/workflow.db
+storage/workflow.db*
 storage/assets/*
 !storage/assets/.gitkeep
 storage/temp/*

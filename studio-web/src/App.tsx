@@ -2,26 +2,41 @@ import { useState } from "react";
 import { AppShell } from "./components/layout/AppShell";
 import { WorkflowStudioView } from "./components/workflow/WorkflowStudioView";
 import { SchemaToolView } from "./components/tools/SchemaToolView";
+import { AssetLibraryView } from "./components/tools/AssetLibraryView";
 import { MODULES_REGISTRY } from "./config/modulesRegistry";
 import type { SubTool } from "./config/modulesRegistry";
+import type { WorkbenchSeed } from "./services/api";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 export function App() {
   const [currentModuleId, setCurrentModuleId] = useState<string>("03-video-gen");
   const [activeTool, setActiveTool] = useState<SubTool | null>(null);
+  const [workbenchSeed, setWorkbenchSeed] = useState<WorkbenchSeed | null>(null);
 
-  const currentModule = MODULES_REGISTRY.find((m) => m.id === currentModuleId) || MODULES_REGISTRY[0];
+  const currentModule =
+    MODULES_REGISTRY.find((m) => m.id === currentModuleId) || MODULES_REGISTRY[0];
 
   const handleSelectModule = (id: string) => {
     setCurrentModuleId(id);
     setActiveTool(null);
   };
 
+  const handleSendToWorkbench = (seed: WorkbenchSeed) => {
+    setWorkbenchSeed(seed);
+    setCurrentModuleId("03-video-gen");
+    setActiveTool(null);
+  };
+
   const renderContent = () => {
-    // If active tool is selected, render SchemaToolView
+    // Asset Library Module directly opens AssetLibraryView
+    if (currentModuleId === "09-asset-library") {
+      return <AssetLibraryView onSendToWorkbench={handleSendToWorkbench} />;
+    }
+
+    // If active tool is selected, render SchemaToolView or WorkflowStudioView
     if (activeTool) {
       if (activeTool.id === "workbench_12nodes") {
-        return <WorkflowStudioView />;
+        return <WorkflowStudioView initialSeed={workbenchSeed} />;
       }
       return (
         <SchemaToolView
@@ -30,13 +45,14 @@ export function App() {
           description={activeTool.description}
           operatorId={activeTool.operatorId}
           isFreeLocal={activeTool.isFreeLocal}
+          onSendToWorkbench={handleSendToWorkbench}
         />
       );
     }
 
     // Special case for video-gen default to flagship 12-nodes workbench
     if (currentModuleId === "03-video-gen") {
-      return <WorkflowStudioView />;
+      return <WorkflowStudioView initialSeed={workbenchSeed} />;
     }
 
     // Default category tools gallery

@@ -83,9 +83,45 @@ def test_project_workflow_crud():
     assert nodes[0]["status"] == "READY"
 
 
+def test_asset_save_list_and_stream():
+    """Verify saving generated temp files to CAS library, listing, and streaming."""
+    temp_dir = PROJECT_ROOT / "storage" / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    sample_mp3 = temp_dir / "tts-test-sample.mp3"
+    sample_mp3.write_bytes(b"ID3-fake-mp3-audio-payload")
+
+    # 1. Stream directly from storage/temp
+    stream_resp = client.get("/api/v2/assets/stream", params={"path": str(sample_mp3)})
+    assert stream_resp.status_code == 200
+    assert stream_resp.content == b"ID3-fake-mp3-audio-payload"
+
+    # 2. Save to CAS asset library
+    save_resp = client.post(
+        "/api/v2/assets/save",
+        json={
+            "file_path": str(sample_mp3),
+            "kind": "audio",
+            "title": "单元测试配音",
+            "meta": {"prompt": "单元测试台词"},
+        },
+    )
+    assert save_resp.status_code == 200
+    save_body = save_resp.json()
+    assert save_body["code"] == "00000"
+    sha256 = save_body["data"]["sha256"]
+    assert len(sha256) == 64
+
+    # 3. List assets in library
+    list_resp = client.get("/api/v2/assets", params={"kind": "audio"})
+    assert list_resp.status_code == 200
+    items = list_resp.json()["data"]
+    assert any(item["sha256"] == sha256 for item in items)
+
+
 if __name__ == "__main__":
     test_health_endpoint()
     test_list_operators()
     test_execute_operator_gateway()
     test_project_workflow_crud()
+    test_asset_save_list_and_stream()
     print("ALL MODULE 4 API GATEWAY TESTS PASSED SUCCESSFULLY!")

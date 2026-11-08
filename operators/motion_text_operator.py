@@ -117,20 +117,34 @@ class MotionTextOperator(BaseOperator[MotionTextInput, MotionTextOutput]):
                 out_vid_path,
             ]
 
-            p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40.0)
-            if p.returncode != 0:
-                # If ffmpeg is not in PATH, create empty placeholder mp4 or fail gracefully
-                pass
+            try:
+                p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40.0)
+                ffmpeg_ok = p.returncode == 0 and os.path.exists(out_vid_path) and os.path.getsize(out_vid_path) > 0
+            except Exception:
+                ffmpeg_ok = False
 
+            if not ffmpeg_ok:
+                if os.path.exists(out_vid_path):
+                    os.remove(out_vid_path)
+                return MotionTextOutput(
+                    video_path=base_img_path,
+                    duration_sec=input_data.duration_sec,
+                    width=w,
+                    height=h,
+                )
+
+            if os.path.exists(base_img_path):
+                os.remove(base_img_path)
             return MotionTextOutput(
                 video_path=out_vid_path,
                 duration_sec=input_data.duration_sec,
                 width=w,
                 height=h,
             )
-        finally:
+        except Exception:
             if os.path.exists(base_img_path):
                 os.remove(base_img_path)
+            raise
 
     def get_input_schema(self) -> Dict[str, Any]:
         """Return input schema for frontend form rendering."""

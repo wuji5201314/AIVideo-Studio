@@ -9,9 +9,15 @@ Follows Alibaba Coding Guidelines:
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+# Always guarantee cwd is D:\AIVideo for storage paths
+PROJECT_ROOT = Path(__file__).resolve().parent
+os.chdir(PROJECT_ROOT)
 
 # Ensure all operators are discovered and registered
 import operators  # noqa: F401

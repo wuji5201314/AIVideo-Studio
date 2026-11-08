@@ -174,57 +174,58 @@ class WorkflowStore:
             path = (self.base_dir / row["rel_path"]).resolve()
             return path if path.exists() else None
 
+    def list_blobs(self, kind: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """List stored CAS blobs ordered by created_at descending."""
+        with self._get_connection() as conn:
+            if kind:
+                rows = conn.execute(
+                    "SELECT * FROM wf_blobs WHERE kind = ? ORDER BY created_at DESC LIMIT ?",
+                    (kind, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM wf_blobs ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            result: List[Dict[str, Any]] = []
+            for r in rows:
+                item = dict(r)
+                try:
+                    item["meta"] = json.loads(item.get("meta_json") or "{}")
+                except Exception:
+                    item["meta"] = {}
+                result.append(item)
+            return result
+
     def create_project(
-        self,
-        project_id: str,
-        title: str,
-        brief: str,
+        self, project_id: str, title: str, brief: str,
         global_config: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Insert a new project record."""
         now = get_iso_now()
         with self._get_connection() as conn:
             conn.execute(
-                """
-                INSERT INTO wf_projects
-                (id, title, brief, global_config, status, active_graph_rev, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'IDLE', 1, ?, ?)
-                """,
-                (
-                    project_id,
-                    title,
-                    brief,
-                    json.dumps(global_config or {}, ensure_ascii=False),
-                    now,
-                    now,
-                ),
+                "INSERT INTO wf_projects (id, title, brief, global_config, status, active_graph_rev, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, 'IDLE', 1, ?, ?)",
+                (project_id, title, brief, json.dumps(global_config or {}, ensure_ascii=False), now, now),
             )
 
     def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
         """Fetch project record by id."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM wf_projects WHERE id = ?",
-                (project_id,),
-            ).fetchone()
+            row = conn.execute("SELECT * FROM wf_projects WHERE id = ?", (project_id,)).fetchone()
             return dict(row) if row else None
 
     def list_projects(self, limit: int = 50) -> List[Dict[str, Any]]:
         """List recent projects ordered by updated_at descending."""
         with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM wf_projects ORDER BY updated_at DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM wf_projects ORDER BY updated_at DESC LIMIT ?", (limit,)).fetchall()
             return [dict(r) for r in rows]
 
     def update_project_status(self, project_id: str, status: str) -> None:
         """Update overall project status."""
         with self._get_connection() as conn:
-            conn.execute(
-                "UPDATE wf_projects SET status = ?, updated_at = ? WHERE id = ?",
-                (status, get_iso_now(), project_id),
-            )
+            conn.execute("UPDATE wf_projects SET status = ?, updated_at = ? WHERE id = ?", (status, get_iso_now(), project_id))
 
     def upsert_node(
         self,
@@ -353,53 +354,30 @@ class WorkflowStore:
     def get_revision(self, rev_id: str) -> Optional[Dict[str, Any]]:
         """Fetch revision by rev_id."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM wf_node_revisions WHERE rev_id = ?",
-                (rev_id,),
-            ).fetchone()
+            row = conn.execute("SELECT * FROM wf_node_revisions WHERE rev_id = ?", (rev_id,)).fetchone()
             return dict(row) if row else None
 
     def list_revisions(self, project_id: str, node_key: str) -> List[Dict[str, Any]]:
         """List all revisions for a node ordered by rev_number descending."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                """
-                SELECT * FROM wf_node_revisions
-                WHERE project_id = ? AND node_key = ?
-                ORDER BY rev_number DESC
-                """,
+                "SELECT * FROM wf_node_revisions WHERE project_id = ? AND node_key = ? ORDER BY rev_number DESC",
                 (project_id, node_key),
             ).fetchall()
             return [dict(r) for r in rows]
 
     def add_feedback(
-        self,
-        feedback_id: str,
-        project_id: str,
-        node_key: str,
-        base_rev_id: str,
-        mode: str,
-        instruction: str = "",
-        locked_keys: Optional[List[str]] = None,
-        patches: Optional[Dict[str, Any]] = None,
-        param_overrides: Optional[Dict[str, Any]] = None,
+        self, feedback_id: str, project_id: str, node_key: str, base_rev_id: str, mode: str,
+        instruction: str = "", locked_keys: Optional[List[str]] = None,
+        patches: Optional[Dict[str, Any]] = None, param_overrides: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Insert user feedback audit record."""
         with self._get_connection() as conn:
             conn.execute(
-                """
-                INSERT INTO wf_feedbacks
-                (feedback_id, project_id, node_key, base_rev_id, mode,
-                 instruction, locked_keys, patches_json, param_overrides, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                "INSERT INTO wf_feedbacks (feedback_id, project_id, node_key, base_rev_id, mode, "
+                "instruction, locked_keys, patches_json, param_overrides, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    feedback_id,
-                    project_id,
-                    node_key,
-                    base_rev_id,
-                    mode,
-                    instruction,
+                    feedback_id, project_id, node_key, base_rev_id, mode, instruction,
                     json.dumps(locked_keys or [], ensure_ascii=False),
                     json.dumps(patches or {}, ensure_ascii=False),
                     json.dumps(param_overrides or {}, ensure_ascii=False),

@@ -1,6 +1,7 @@
 """Unit tests for Core Operators and OperatorRegistry."""
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ def test_operator_registry_discovery():
         "op_smart_editor",
         "op_motion_text",
         "op_digital_human",
+        "op_video_composer",
     }
     for eid in expected_ids:
         assert eid in op_ids, f"Operator {eid} should be registered"
@@ -63,6 +65,29 @@ def test_script_operator_locked_keys_refine():
     # Shot 02 and 03 must have applied the refine instruction
     assert "第2第3镜改生动些" in refine_out.shots[1].narration
     assert "第2第3镜改生动些" in refine_out.shots[2].narration
+
+
+def test_video_composer_operator():
+    """Verify VideoComposerOperator stitches multiple shots into master MP4."""
+    from operators.video_composer_operator import ShotSpec, VideoComposeInput, VideoComposerOperator
+
+    op = VideoComposerOperator()
+    input_data = VideoComposeInput(
+        title="测试成片混音",
+        aspect_ratio="9:16",
+        shots=[
+            ShotSpec(shot_id="shot_01", headline="第1幕痛点", narration="这是第1幕痛点解说台词", est_duration=2.0),
+            ShotSpec(shot_id="shot_02", headline="第2幕解法", narration="这是第2幕节点化解法", est_duration=2.0),
+        ],
+    )
+    res = asyncio.run(op.execute(input_data, {}))
+    assert res.shot_count == 2
+    assert res.duration_sec >= 3.5
+    assert os.path.exists(res.video_path)
+    assert os.path.getsize(res.video_path) > 1000
+    # Clean up generated test video
+    if os.path.exists(res.video_path):
+        os.remove(res.video_path)
 
 
 if __name__ == "__main__":

@@ -84,17 +84,53 @@ export interface OperatorMeta {
   input_schema: Record<string, unknown>;
 }
 
-const API_BASE = "http://localhost:8010";
+export interface AssetItem {
+  sha256: string;
+  kind: "audio" | "video" | "image" | "script" | string;
+  title: string;
+  rel_path: string;
+  file_path: string;
+  size_bytes: number;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface WorkbenchSeed {
+  prompt: string;
+  voiceName?: string;
+  aspectRatio?: string;
+  mediaPath?: string;
+  mediaType?: "audio" | "video" | "image" | "script";
+  shots?: ShotItem[];
+  sourceToolName?: string;
+}
+
+export const API_BASE =
+  typeof window !== "undefined" && window.location.port === "5173"
+    ? ""
+    : "http://127.0.0.1:8010";
+
+export function getStreamUrl(pathOrSha256: string): string {
+  if (/^[a-fA-F0-9]{64}$/.test(pathOrSha256)) {
+    return `${API_BASE}/api/v2/assets/stream?sha256=${encodeURIComponent(pathOrSha256)}`;
+  }
+  return `${API_BASE}/api/v2/assets/stream?path=${encodeURIComponent(pathOrSha256)}`;
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const resp = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+  } catch (_err) {
+    throw new Error("无法连接后端服务 (8010 端口)，请确认后端 API 服务已正常运行。");
+  }
 
   const body: ResultEnvelope<T> = await resp.json();
   if (body.code !== "00000") {
@@ -116,11 +152,18 @@ export const api = {
   getProjectDAG: (projectId: string) =>
     request<ProjectDetails>(`/api/v2/projects/${projectId}`),
 
-  patchNodeConfig: (projectId: string, nodeKey: string, payload: { gate_enabled?: boolean; locked?: boolean; config?: Record<string, unknown> }) =>
-    request<{ node_key: string; stale_downstream: string[] }>(`/api/v2/projects/${projectId}/nodes/${nodeKey}/config`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
+  patchNodeConfig: (
+    projectId: string,
+    nodeKey: string,
+    payload: { gate_enabled?: boolean; locked?: boolean; config?: Record<string, unknown> }
+  ) =>
+    request<{ node_key: string; stale_downstream: string[] }>(
+      `/api/v2/projects/${projectId}/nodes/${nodeKey}/config`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }
+    ),
 
   submitFeedback: (
     projectId: string,
@@ -133,17 +176,44 @@ export const api = {
       manual_patches?: Record<string, unknown>;
     }
   ) =>
-    request<{ feedback_id: string; plan: ExecutionPlan }>(`/api/v2/projects/${projectId}/nodes/${nodeKey}/feedback`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    request<{ feedback_id: string; plan: ExecutionPlan }>(
+      `/api/v2/projects/${projectId}/nodes/${nodeKey}/feedback`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    ),
 
   // Operators
   listOperators: () => request<OperatorMeta[]>("/api/v2/operators"),
 
-  executeOperator: <TOutput = unknown>(opId: string, inputData: Record<string, unknown>, config: Record<string, unknown> = {}) =>
+  executeOperator: <TOutput = unknown>(
+    opId: string,
+    inputData: Record<string, unknown>,
+    config: Record<string, unknown> = {}
+  ) =>
     request<TOutput>(`/api/v2/operators/${opId}/execute`, {
       method: "POST",
       body: JSON.stringify({ input: inputData, config }),
     }),
+
+  // Assets & CAS Library
+  listAssets: (kind?: string) =>
+    request<AssetItem[]>(
+      kind ? `/api/v2/assets?kind=${encodeURIComponent(kind)}` : "/api/v2/assets"
+    ),
+
+  saveAsset: (payload: {
+    file_path?: string;
+    kind: string;
+    title: string;
+    meta?: Record<string, unknown>;
+  }) =>
+    request<{ sha256: string; kind: string; title: string; size_bytes: number; file_path: string }>(
+      "/api/v2/assets/save",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    ),
 };
