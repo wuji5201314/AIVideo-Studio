@@ -58,27 +58,46 @@ class ScriptOperator(BaseOperator[ScriptInput, ScriptOutput]):
         return self._generate_initial_script(input_data)
 
     def _generate_initial_script(self, input_data: ScriptInput) -> ScriptOutput:
-        """Mock/LLM initial storyboard generation."""
-        shots: List[ShotItem] = []
-        count = input_data.shot_count
-        prompt = input_data.prompt.strip()
+        """Intelligent storyboard generation strictly matching user prompt and topic."""
+        prompt = input_data.prompt.strip() or "新一代 AI 视频工作流"
+        count = max(2, min(input_data.shot_count, 6))
 
-        for i in range(1, count + 1):
-            sid = f"shot_{i:02d}"
+        templates = [
+            (
+                "黄金前3秒：痛点吸引",
+                f"你是否也想搞懂「{prompt}」？很多人花费大量时间，却依然找不到核心突破口。",
+                f"特写微距镜头，展现与「{prompt}」密切相关的核心场景与视觉焦点",
+            ),
+            (
+                "深度拆解：关键认知",
+                f"深入来看，「{prompt}」的关键在于理清全流程脉络，按步骤精准掌控每个环节。",
+                f"极简科技感概念画面，结构化网格与流程图示，展现「{prompt}」的执行细节",
+            ),
+            (
+                "落地见效：终极指南",
+                f"用对方法之后，掌握「{prompt}」其实可以做到零成本、高确定性极速出结果！",
+                f"明亮大气的现代质感特写，展现「{prompt}」的高清成果与落地场景",
+            ),
+        ]
+
+        shots: List[ShotItem] = []
+        for i in range(count):
+            sid = f"shot_{i+1:02d}"
+            tmpl = templates[i % len(templates)]
             shots.append(ShotItem(
                 shot_id=sid,
-                headline=f"第{i}幕：核心要点",
-                narration=f"这是关于「{prompt}」的第{i}个关键要点，生动展开讲解。",
-                visual_prompt=f"现代简约风格，高清电影质感，展现 {prompt} 相关画面特写",
-                search_terms=[prompt, "technology", "modern"],
-                est_duration=3.5,
+                headline=tmpl[0],
+                narration=tmpl[1],
+                visual_prompt=tmpl[2],
+                search_terms=[prompt, "cinematic", "technology"],
+                est_duration=4.0,
                 is_locked=False,
             ))
 
         return ScriptOutput(
-            title=f"关于「{prompt}」的爆款视频",
-            summary=f"针对 {prompt} 展开的完整视频分镜",
-            tags=["AI视频", "效率工具", "爆款技巧"],
+            title=f"关于「{prompt}」的爆款指南",
+            summary=f"围绕 {prompt} 展开的专业结构化视频分镜",
+            tags=[prompt, "深度解析", "干货指南"],
             shots=shots,
         )
 

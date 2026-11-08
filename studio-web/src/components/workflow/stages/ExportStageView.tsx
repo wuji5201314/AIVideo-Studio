@@ -6,9 +6,10 @@ import type { ShotItem } from "../../../services/api";
 interface ExportStageViewProps {
   shots: ShotItem[];
   projectTitle: string;
+  defaultVoice?: string;
 }
 
-export const ExportStageView: React.FC<ExportStageViewProps> = ({ shots, projectTitle }) => {
+export const ExportStageView: React.FC<ExportStageViewProps> = ({ shots, projectTitle, defaultVoice }) => {
   const [resolution, setResolution] = useState<string>("1080p");
   const [exportFps, setExportFps] = useState<number>(30);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
@@ -36,6 +37,7 @@ export const ExportStageView: React.FC<ExportStageViewProps> = ({ shots, project
         title: projectTitle || "新一代 AI 视频工作流全拆解",
         aspect_ratio: "9:16",
         fps: exportFps,
+        voice_name: defaultVoice || "zh-CN-YunxiNeural",
         shots: shots.map((s) => ({
           shot_id: s.shot_id,
           headline: s.headline,

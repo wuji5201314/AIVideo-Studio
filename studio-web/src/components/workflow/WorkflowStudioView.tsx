@@ -75,8 +75,8 @@ export const WorkflowStudioView: React.FC<WorkflowStudioViewProps> = ({ initialS
     N11_EXPORT: "PENDING",
   });
   const [briefConfig, setBriefConfig] = useState<ProjectBriefConfig>({
-    title: "新一代 AI 视频工作流全拆解",
-    topicPrompt: initialSeed?.prompt || "欢迎体验新一代 AI 视频工作台，零成本极速出片。",
+    title: "",
+    topicPrompt: initialSeed?.prompt || "",
     stylePreset: "vlog",
     aspectRatio: initialSeed?.aspectRatio || "9:16",
     targetDurationSec: 30,
@@ -243,6 +243,39 @@ export const WorkflowStudioView: React.FC<WorkflowStudioViewProps> = ({ initialS
     });
   };
 
+  const handleConfirmTopic = async (topic: TopicCandidate) => {
+    setIsProcessing(true);
+    try {
+      setBriefConfig((prev) => ({ ...prev, title: topic.title, topicPrompt: topic.title }));
+      const res = await api.executeOperator<{ shots: ShotItem[] }>(
+        "op_script_storyboard",
+        {
+          prompt: topic.title,
+          shot_count: 3,
+        }
+      );
+      if (res && res.shots && res.shots.length > 0) {
+        setShots(res.shots);
+      }
+      setStageStatuses((prev) => ({
+        ...prev,
+        N02_TOPIC: "SUCCEEDED",
+        N03_SCRIPT: "SUCCEEDED",
+        N05_VOICE: "STALE",
+        N06_MATERIAL: "STALE",
+        N07_SHOT_RENDER: "PENDING",
+        N11_EXPORT: "PENDING",
+      }));
+      setActiveStage("N03_SCRIPT");
+      setApproveNotice(`✓ 已选定选题「${topic.title}」，并成功生成匹配的 3 幕分镜脚本！`);
+    } catch (e: any) {
+      console.error(e);
+      setApproveNotice("选题脚本生成失败，请重试");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleApproveCurrentStage = () => {
     setStageStatuses((prev) => ({
       ...prev,
@@ -272,13 +305,11 @@ export const WorkflowStudioView: React.FC<WorkflowStudioViewProps> = ({ initialS
       case "N02_TOPIC":
         return (
           <TopicStageView
+            prompt={briefConfig.topicPrompt || briefConfig.title}
             onSelectTopic={(topic: TopicCandidate) =>
               setBriefConfig((prev) => ({ ...prev, title: topic.title }))
             }
-            onNextStage={() => {
-              setStageStatuses((prev) => ({ ...prev, N02_TOPIC: "SUCCEEDED" }));
-              handleNextStage("N03_SCRIPT");
-            }}
+            onConfirmTopic={handleConfirmTopic}
           />
         );
       case "N03_SCRIPT":
@@ -330,7 +361,13 @@ export const WorkflowStudioView: React.FC<WorkflowStudioViewProps> = ({ initialS
           />
         );
       case "N11_EXPORT":
-        return <ExportStageView shots={shots} projectTitle={briefConfig.title} />;
+        return (
+          <ExportStageView
+            shots={shots}
+            projectTitle={briefConfig.title}
+            defaultVoice={briefConfig.voiceName}
+          />
+        );
       default:
         return null;
     }

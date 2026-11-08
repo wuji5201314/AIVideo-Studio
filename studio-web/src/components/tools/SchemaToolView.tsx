@@ -21,7 +21,7 @@ export const SchemaToolView: React.FC<SchemaToolViewProps> = ({
   onSendToWorkbench,
   onAssetSaved,
 }) => {
-  const [inputText, setInputText] = useState<string>("欢迎体验新一代 AI 视频工作台，零成本极速出片。");
+  const [inputText, setInputText] = useState<string>("");
   const [voiceName, setVoiceName] = useState<string>("zh-HK-HiuMaanNeural");
   const [aspectRatio, setAspectRatio] = useState<string>("9:16");
   const [outputMedia, setOutputMedia] = useState<string | null>(null);
