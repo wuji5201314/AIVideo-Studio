@@ -49,6 +49,7 @@ class VoiceOperator(BaseOperator[VoiceInput, VoiceOutput]):
     description = "高质感人声合成与按句重录，内置普通话及多种方言音色"
     is_free_local = True
     cost_type = CostType.TTS
+    input_dto_cls = VoiceInput
 
     async def execute(
         self,

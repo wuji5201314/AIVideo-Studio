@@ -49,6 +49,7 @@ class AvatarOperator(BaseOperator[AvatarInput, AvatarOutput]):
     description = "一键生成全屏口播数字人或画中画（PiP）主播讲解视频"
     is_free_local = True
     cost_type = CostType.VIDEO_GEN
+    input_dto_cls = AvatarInput
 
     async def execute(
         self,

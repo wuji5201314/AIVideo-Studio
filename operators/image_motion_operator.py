@@ -48,6 +48,7 @@ class ImageMotionOperator(BaseOperator[ImageMotionInput, ImageMotionOutput]):
     description = "零成本将静态图片转化为推拉摇移（Ken Burns）电影感动态片段"
     is_free_local = True
     cost_type = CostType.FFMPEG
+    input_dto_cls = ImageMotionInput
 
     MOTIONS: Dict[str, str] = {
         "zoom_in": "zoompan=z='min(zoom+0.0015,1.25)':d=125:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",

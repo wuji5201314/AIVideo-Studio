@@ -39,6 +39,7 @@ class ScriptOperator(BaseOperator[ScriptInput, ScriptOutput]):
     description = "一键生成结构化多镜头脚本，支持锁定特定镜头进行局部增量微调"
     is_free_local = False
     cost_type = CostType.LLM
+    input_dto_cls = ScriptInput
 
     async def execute(
         self,

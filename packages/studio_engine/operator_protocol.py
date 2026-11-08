@@ -54,6 +54,7 @@ class BaseOperator(ABC, Generic[InDTO, OutDTO]):
     description: str
     is_free_local: bool = True
     cost_type: CostType = CostType.NONE
+    input_dto_cls: Optional[type] = None
 
     @abstractmethod
     async def execute(
@@ -67,5 +68,6 @@ class BaseOperator(ABC, Generic[InDTO, OutDTO]):
 
     def get_input_schema(self) -> Dict[str, Any]:
         """Return the JSON schema for operator input form rendering."""
-        # Derived from generic type if possible or subclasses can override
+        if self.input_dto_cls and hasattr(self.input_dto_cls, "model_json_schema"):
+            return self.input_dto_cls.model_json_schema()
         return {}

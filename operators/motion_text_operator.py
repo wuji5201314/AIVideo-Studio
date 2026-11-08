@@ -50,6 +50,7 @@ class MotionTextOperator(BaseOperator[MotionTextInput, MotionTextOutput]):
     description = "零成本本机极速渲染文字动画卡片（逐行上浮/标题卡/动感字）"
     is_free_local = True
     cost_type = CostType.FFMPEG
+    input_dto_cls = MotionTextInput
 
     ASPECT_MAP = {
         "9:16": (1080, 1920),

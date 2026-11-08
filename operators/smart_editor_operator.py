@@ -55,6 +55,7 @@ class SmartEditorOperator(BaseOperator[EditorInput, EditorOutput]):
     description = "自动检测切除气口与无声片段、一键转竖屏、画质高清放大"
     is_free_local = True
     cost_type = CostType.FFMPEG
+    input_dto_cls = EditorInput
 
     async def execute(
         self,
