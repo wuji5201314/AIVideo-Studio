@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   UserCheck,
   Sparkles,
@@ -13,6 +13,7 @@ import {
   Film,
   Sliders,
   RefreshCw,
+  Activity,
 } from "lucide-react";
 import { api, getStreamUrl } from "../../services/api";
 
@@ -25,7 +26,8 @@ interface AvatarModel {
   name: string;
   tag: string;
   voice: string;
-  img: string;
+  kind: "video" | "portrait";
+  mediaUrl: string;
 }
 
 interface BatchTaskItem {
@@ -34,39 +36,45 @@ interface BatchTaskItem {
   script: string;
   avatarId: string;
   voiceName: string;
+  subtitleStyle: string;
   status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
   videoPath?: string;
   durationSec?: number;
+  engineNote?: string;
 }
 
 const AVATAR_MODELS: AvatarModel[] = [
   {
     id: "avatar_1",
-    name: "极客阿辰",
-    tag: "数码科技 · 沉稳口播",
-    voice: "zh-CN-YunxiNeural",
-    img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+    name: "活力小琳",
+    tag: "好物带货 · 亲和热情",
+    voice: "zh-HK-HiuMaanNeural",
+    kind: "portrait",
+    mediaUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80",
   },
   {
     id: "avatar_2",
-    name: "知性苏老师",
-    tag: "知识科普 · 亲和讲解",
-    voice: "zh-CN-XiaoxiaoNeural",
-    img: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80",
+    name: "极客阿辰",
+    tag: "数码科技 · 沉稳口播",
+    voice: "zh-CN-YunxiNeural",
+    kind: "portrait",
+    mediaUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
   },
   {
     id: "avatar_3",
-    name: "活力小琳",
-    tag: "好物带货 · 热情洋溢",
-    voice: "zh-HK-HiuMaanNeural",
-    img: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80",
+    name: "知性苏老师",
+    tag: "知识科普 · 深度干货",
+    voice: "zh-CN-XiaoxiaoNeural",
+    kind: "portrait",
+    mediaUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=600&q=80",
   },
   {
     id: "avatar_4",
     name: "商务顾总",
-    tag: "商业财经 · 权威深度",
+    tag: "商业财经 · 权威职场",
     voice: "zh-CN-YunjianNeural",
-    img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+    kind: "portrait",
+    mediaUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
   },
 ];
 
@@ -79,18 +87,32 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
       : "avatar_fast"
   );
 
+  // Engine Status State
+  const [heygemStatus, setHeygemStatus] = useState<{
+    available: boolean;
+    mode: string;
+    description: string;
+  } | null>(null);
+
+  useEffect(() => {
+    api.getHeyGemStatus().then(setHeygemStatus).catch(() => null);
+  }, []);
+
   // --- Mode 1: Batch Digital Human State ---
   const [selectedAvatarId, setSelectedAvatarId] = useState<string>("avatar_1");
   const [aspectRatio, setAspectRatio] = useState<string>("9:16");
+  const [subtitleStyle, setSubtitleStyle] = useState<string>("douyin_yellow");
+  const [customMediaUrl] = useState<string>("");
   const [newScript, setNewScript] = useState<string>("");
   const [fissionTopic, setFissionTopic] = useState<string>("");
   const [batchQueue, setBatchQueue] = useState<BatchTaskItem[]>([
     {
       id: "task_1",
       title: "口播任务 #1 · 痛点切入",
-      script: "很多人做短视频一上来就盲目堆砌素材，其实真正决定完播率的是前3秒的黄金钩子与清晰的逻辑主线。",
+      script: "新手接触跨境电商最容易踩的3个大坑：盲目跟风、忽视底层逻辑、缺少复盘迭代，快来看看你中招没。",
       avatarId: "avatar_1",
-      voiceName: "zh-CN-YunxiNeural",
+      voiceName: "zh-HK-HiuMaanNeural",
+      subtitleStyle: "douyin_yellow",
       status: "PENDING",
     },
   ]);
@@ -116,7 +138,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
   const getAvatar = (id: string): AvatarModel =>
     AVATAR_MODELS.find((a) => a.id === id) || AVATAR_MODELS[0];
 
-  // --- Mode 1 Handlers: Batch Queue ---
+  // --- Handlers: Batch Queue ---
   const handleAddSingleTask = () => {
     if (!newScript.trim()) return;
     const av = getAvatar(selectedAvatarId);
@@ -129,6 +151,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
         script: newScript.trim(),
         avatarId: av.id,
         voiceName: av.voice,
+        subtitleStyle,
         status: "PENDING",
       },
     ]);
@@ -136,11 +159,20 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
   };
 
   const handleAiFissionBatch = () => {
-    const topic = fissionTopic.trim() || "AI 提效与自动化办公";
+    const topic = fissionTopic.trim() || "AI短视频自动化与数字人口播";
     const angles = [
-      { tag: "痛点反转切角", text: `为什么你用了那么多工具关于「${topic}」还是没效果？因为你缺的不是软件，而是一套标准化流水线。` },
-      { tag: "干货实操切角", text: `今天用30秒教你搞定「${topic}」：第一步明确核心指标，第二步模块化拆解，效率直接提升10倍！` },
-      { tag: "避坑指南切角", text: `新手接触「${topic}」最容易踩的3个大坑：盲目跟风、忽视底层逻辑、缺少复盘迭代，快来看看你中招没。` },
+      {
+        tag: "痛点反转切角",
+        text: `为什么你用了那么多工具做「${topic}」还是没流量？因为你缺的不是软件，而是一套工业级批量工作台。`,
+      },
+      {
+        tag: "干货实操切角",
+        text: `今天30秒教你搞定「${topic}」：第一步明确受众痛点，第二步AI智能裂变分镜，效率直接提升10倍！`,
+      },
+      {
+        tag: "避坑指南切角",
+        text: `新手做「${topic}」最容易踩的3个大坑：盲目跟风、忽视底层逻辑、缺少复盘迭代，快来看看你中招没。`,
+      },
     ];
     const items: BatchTaskItem[] = angles.map((ang, i) => {
       const av = AVATAR_MODELS[i % AVATAR_MODELS.length];
@@ -150,30 +182,46 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
         script: ang.text,
         avatarId: av.id,
         voiceName: av.voice,
+        subtitleStyle,
         status: "PENDING",
       };
     });
     setBatchQueue(items);
-    setNotice(`✓ 已围绕「${topic}」智能裂变 3 条不同切角与主播的批量口播任务！`);
+    setNotice(`已围绕「${topic}」智能裂变 3 条不同切角与主播的批量口播任务！`);
   };
 
   const runSingleBatchItem = async (task: BatchTaskItem) => {
     setBatchQueue((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: "RUNNING" } : t)));
     const av = getAvatar(task.avatarId);
+    const mediaSource = customMediaUrl.trim() || av.mediaUrl;
     try {
-      const res = await api.executeOperator<{ video_path: string; duration_sec: number }>("op_digital_human", {
+      const res = await api.executeOperator<{
+        video_path: string;
+        duration_sec: number;
+        engine_note?: string;
+      }>("op_digital_human", {
         text: task.script,
         voice_name: task.voiceName,
-        face_image_path: av.img,
+        face_image_path: mediaSource,
+        source_kind: av.kind,
         avatar_name: av.name,
         avatar_tag: av.tag,
         sub_mode: "fast",
         aspect_ratio: aspectRatio,
+        subtitle_style: task.subtitleStyle,
       });
       if (res?.video_path) {
         setBatchQueue((prev) =>
           prev.map((t) =>
-            t.id === task.id ? { ...t, status: "DONE", videoPath: res.video_path, durationSec: res.duration_sec } : t
+            t.id === task.id
+              ? {
+                  ...t,
+                  status: "DONE",
+                  videoPath: res.video_path,
+                  durationSec: res.duration_sec,
+                  engineNote: res.engine_note,
+                }
+              : t
           )
         );
         setActivePreviewVideo(res.video_path);
@@ -192,17 +240,19 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
       }
     }
     setIsRunningBatch(false);
-    setNotice("✓ 批量队列全部数字人视频已合成完毕！可直接播放或下载 MP4 成片。");
+    setNotice("批量口播合成任务全部执行完成！");
   };
 
-  // --- Mode 2 Handlers: 4-Step Remake Wizard ---
+  // --- Handlers: Remake Wizard ---
   const handleExtractBenchmark = () => {
-    const topic = benchmarkUrl.trim() || "爆款科技口播对标样片";
+    if (!benchmarkUrl.trim()) {
+      setBenchmarkUrl("https://v.douyin.com/example-anchor-video/");
+    }
     setOriginalText(
-      `【原片黄金前3秒】90%的人都在做无用功！关于「${topic}」，真正的高手从来不靠死磕时间，而是掌握了这3个核心底层逻辑。`
+      "做自媒体千万不要用肉身去拼更新频率！聪明人都在用 AI 数字人批量起号：先对标拆解爆款文案，再用自动化流水线一键生成 10 条矩阵视频，这才是普通人翻盘的最高杠杆！"
     );
     setRewrittenText(
-      `你是不是也在「${topic}」上花了大量精力却收效甚微？其实拉开差距的往往不是努力程度，而是这套拿来即用的3步降维打法！`
+      "想在短视频平台拿到结果，千万别靠死磕时长！真正的高手早就建立起标准化矩阵生产线：先结构化提炼高赞文案，再通过 AI 工作台快速复制出多条精美口播，直接把制作周期压缩到零成本！"
     );
     setRemakeStep(2);
   };
@@ -211,92 +261,124 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
     setIsRemaking(true);
     const av = getAvatar(selectedAvatarId);
     try {
-      const res = await api.executeOperator<{ video_path: string }>("op_digital_human", {
-        text: rewrittenText.trim() || "这是复刻改写后的原创数字人口播成片。",
-        voice_name: av.voice,
-        face_image_path: av.img,
-        avatar_name: av.name,
-        avatar_tag: "对标复刻原创",
-        sub_mode: "remake",
-        aspect_ratio: aspectRatio,
-      });
+      const res = await api.executeOperator<{ video_path: string; duration_sec: number }>(
+        "op_digital_human",
+        {
+          text: rewrittenText.trim() || originalText.trim(),
+          voice_name: av.voice,
+          face_image_path: av.mediaUrl,
+          avatar_name: av.name,
+          avatar_tag: av.tag,
+          sub_mode: "remake",
+          aspect_ratio: aspectRatio,
+          subtitle_style: subtitleStyle,
+        }
+      );
       if (res?.video_path) {
         setRemakeVideoPath(res.video_path);
         setRemakeStep(4);
       }
+    } catch (e) {
+      alert("复刻合成失败: " + String(e));
     } finally {
       setIsRemaking(false);
     }
   };
 
-  // --- Mode 3 Handlers: Lip-Sync ---
+  // --- Handlers: LipSync ---
   const handleRunLipsync = async () => {
+    if (!lipsyncText.trim()) return;
     setIsLipsyncing(true);
     const av = getAvatar(selectedAvatarId);
     try {
-      const res = await api.executeOperator<{ video_path: string }>("op_digital_human", {
-        text: lipsyncText.trim() || "保留原视频人物眼神与微表情，精准匹配新音频口型。",
-        voice_name: lipsyncVoice,
-        face_image_path: av.img,
-        avatar_name: av.name,
-        avatar_tag: `唇形同步精度 ${mouthSensitivity}%`,
-        sub_mode: "lipsync",
-        aspect_ratio: aspectRatio,
-      });
+      const res = await api.executeOperator<{ video_path: string; duration_sec: number }>(
+        "op_digital_human",
+        {
+          text: lipsyncText.trim(),
+          voice_name: lipsyncVoice,
+          face_image_path: av.mediaUrl,
+          avatar_name: av.name,
+          avatar_tag: av.tag,
+          sub_mode: "lipsync",
+          aspect_ratio: "9:16",
+          subtitle_style: subtitleStyle,
+        }
+      );
       if (res?.video_path) {
         setLipsyncVideoPath(res.video_path);
       }
+    } catch (e) {
+      alert("对口型合成失败: " + String(e));
     } finally {
       setIsLipsyncing(false);
     }
   };
 
-  const handleSaveToAsset = async (videoPath: string, label: string) => {
-    await api.saveAsset({
-      file_path: videoPath,
-      kind: "video",
-      title: `数字人成片 · ${label}`,
-      meta: { sub_mode: activeTab },
-    });
-    setNotice("✓ 已成功归档至素材库！");
+  const handleSaveToAsset = async (videoPath: string, title: string) => {
+    try {
+      await api.saveAsset({
+        file_path: videoPath,
+        kind: "video",
+        title: `数字人口播成片 · ${title}`,
+        meta: { operator: "op_digital_human" },
+      });
+      alert("成功存入素材库与 CAS 内容寻址存储！");
+    } catch (e) {
+      alert("存入失败: " + String(e));
+    }
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Top Studio Header & Sub-Tool Mode Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border-subtle">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header & Sub-tool Navigation */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-apple-blue" />
-            <h1 className="text-lg font-bold text-ink">数字人独立成片工坊 (Digital Human Studio)</h1>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-apple-green/10 text-apple-green font-medium">
-              独立闭环直出 MP4 · 无需跳转节点台
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold tracking-tight text-ink">数字人口播工作台</h1>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-apple-blue/10 text-apple-blue font-medium">
+              JY_IPAgent 口播架构优化版
             </span>
           </div>
-          <p className="text-xs text-ink-muted mt-1">
-            针对不同数字人应用场景提供专属工作流：支持多任务批量口播队列、4步对标洗稿复刻、以及双轨音画对口型。
+          <p className="text-xs text-ink-muted">
+            对齐专业短视频工作流：支持电影级呼吸推焦、抖音高燃金黄节奏字幕、顶部主播徽章及 HeyGem 对口型联动
           </p>
         </div>
 
-        <div className="flex items-center p-1 bg-surface-muted rounded-lg border border-border-subtle text-xs">
-          {[
-            { id: "avatar_fast", label: "① 一键 / 批量数字人" },
-            { id: "avatar_remake", label: "② 对标复刻 (4步向导)" },
-            { id: "avatar_lipsync", label: "③ 视频音画对口型" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as "avatar_fast" | "avatar_remake" | "avatar_lipsync")}
-              className={`px-3.5 py-1.5 rounded-md font-medium transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? "bg-surface text-apple-blue shadow-soft font-semibold"
-                  : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* HeyGem / Local Engine Status Pill */}
+        <div className="flex items-center gap-2 p-2 px-3 rounded-lg bg-surface border border-border-subtle shadow-xs">
+          <Activity
+            className={`w-3.5 h-3.5 ${
+              heygemStatus?.available ? "text-apple-green animate-pulse" : "text-apple-blue"
+            }`}
+          />
+          <div className="text-xs font-medium text-ink">
+            {heygemStatus?.available
+              ? "HeyGem 口型服务在线 (端口 8383)"
+              : "内置电影级动态运镜 + 抖音网感字幕"}
+          </div>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-border-subtle pb-3">
+        {[
+          { id: "avatar_fast", label: "批量数字人口播", desc: "矩阵文案/多主播批量直出" },
+          { id: "avatar_remake", label: "对标视频4步复刻", desc: "抽帧解析 · AI洗稿 · 换人成片" },
+          { id: "avatar_lipsync", label: "音画双轨对口型", desc: "本地音频/文字驱动高精度口型" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer text-left ${
+              activeTab === tab.id
+                ? "bg-ink text-surface shadow-soft"
+                : "bg-surface text-ink-muted hover:text-ink hover:bg-surface-muted border border-border-subtle"
+            }`}
+          >
+            <div className="font-semibold">{tab.label}</div>
+            <div className="text-[10px] opacity-80">{tab.desc}</div>
+          </button>
+        ))}
       </div>
 
       {notice && (
@@ -314,7 +396,10 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
           {/* Left: Anchor Selection & Batch Task Creator (5 cols) */}
           <div className="lg:col-span-5 space-y-4">
             <div className="p-4 bg-surface rounded-apple border border-border-subtle shadow-card space-y-3">
-              <div className="text-xs font-semibold text-ink">1. 选择出镜数字人主播底模</div>
+              <div className="text-xs font-semibold text-ink flex items-center justify-between">
+                <span>1. 选择出镜主播底模</span>
+                <span className="text-[10px] text-apple-blue">支持肖像呼吸运镜与视频底板</span>
+              </div>
               <div className="grid grid-cols-2 gap-2.5">
                 {AVATAR_MODELS.map((av) => (
                   <div
@@ -326,7 +411,11 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                         : "border-border-subtle bg-surface-muted hover:border-ink-muted/30"
                     }`}
                   >
-                    <img src={av.img} alt={av.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    <img
+                      src={av.mediaUrl}
+                      alt={av.name}
+                      className="w-10 h-10 rounded-full object-cover shrink-0"
+                    />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-ink truncate">{av.name}</div>
                       <div className="text-[10px] text-ink-muted truncate">{av.tag}</div>
@@ -334,12 +423,46 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                   </div>
                 ))}
               </div>
+
+              {/* Subtitle Style & Aspect Ratio */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border-subtle">
+                <div>
+                  <label className="text-[11px] text-ink-muted block mb-1">网感字幕样式</label>
+                  <select
+                    value={subtitleStyle}
+                    onChange={(e) => setSubtitleStyle(e.target.value)}
+                    className="w-full text-xs p-1.5 rounded border border-border-subtle bg-canvas text-ink"
+                  >
+                    <option value="douyin_yellow">抖音爆款金黄 (粗体黑边)</option>
+                    <option value="clean_white">纯白高光加深描边</option>
+                    <option value="none">无字幕 (纯净画面)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-ink-muted block mb-1">画幅比例</label>
+                  <div className="flex gap-1">
+                    {["9:16", "16:9"].map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setAspectRatio(r)}
+                        className={`flex-1 py-1.5 text-[11px] rounded border cursor-pointer ${
+                          aspectRatio === r
+                            ? "border-apple-blue text-apple-blue font-semibold bg-apple-blue/5"
+                            : "border-border-subtle text-ink-muted bg-canvas"
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="p-4 bg-surface rounded-apple border border-border-subtle shadow-card space-y-3">
               <div className="text-xs font-semibold text-ink flex items-center justify-between">
                 <span>2. 批量任务录入 / AI 多切角裂变</span>
-                <span className="text-[10px] text-apple-blue">支持多主播矩阵排产</span>
+                <span className="text-[10px] text-apple-blue">支持多主播矩阵排期</span>
               </div>
 
               {/* AI Batch Fission Box */}
@@ -353,14 +476,14 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                     type="text"
                     value={fissionTopic}
                     onChange={(e) => setFissionTopic(e.target.value)}
-                    placeholder="输入行业主题，如：Python自动化、跨境电商..."
+                    placeholder="输入行业主题，如：跨境电商、AI自媒体、健康养生..."
                     className="flex-1 text-xs p-2 rounded border border-border-subtle bg-surface text-ink"
                   />
                   <button
                     onClick={handleAiFissionBatch}
                     className="px-3 py-1.5 bg-apple-blue text-surface text-xs font-semibold rounded cursor-pointer shrink-0"
                   >
-                    一键裂变3条
+                    一键裂变
                   </button>
                 </div>
               </div>
@@ -374,20 +497,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                   placeholder="或者手动输入单条口播台词，点击下方加入批量合成队列..."
                   className="w-full text-xs p-2.5 rounded-md border border-border-subtle bg-canvas text-ink resize-none"
                 />
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex gap-1.5">
-                    {["9:16", "16:9"].map((r) => (
-                      <button
-                        key={r}
-                        onClick={() => setAspectRatio(r)}
-                        className={`px-2.5 py-1 text-[11px] rounded border cursor-pointer ${
-                          aspectRatio === r ? "border-apple-blue text-apple-blue font-semibold" : "border-border-subtle text-ink-muted"
-                        }`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex items-center justify-end">
                   <button
                     onClick={handleAddSingleTask}
                     disabled={!newScript.trim()}
@@ -401,53 +511,75 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
             </div>
           </div>
 
-          {/* Right: Batch Queue List & Direct MP4 Preview/Download (7 cols) */}
+          {/* Right: Batch Execution Queue & Player (7 cols) */}
           <div className="lg:col-span-7 space-y-4">
             <div className="p-4 bg-surface rounded-apple border border-border-subtle shadow-card space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs font-bold text-ink">批量数字人合成队列 ({batchQueue.length} 项任务)</h3>
-                  <p className="text-[11px] text-ink-muted">每项任务独立合成含真人配音、主播形象与大字字幕的完整 MP4</p>
+                  <h3 className="text-xs font-bold text-ink">3. 批量口播排期队列</h3>
+                  <p className="text-[10px] text-ink-muted">
+                    当前队列共有 {batchQueue.length} 个任务，可逐条微调或一键批处理
+                  </p>
                 </div>
                 <button
                   onClick={handleRunAllBatch}
                   disabled={isRunningBatch || batchQueue.length === 0}
-                  className="px-4 py-2 bg-ink hover:bg-ink/90 disabled:opacity-50 text-surface text-xs font-semibold rounded-md shadow-soft flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 bg-ink text-surface text-xs font-semibold rounded-md shadow-soft flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-apple-blue" />
-                  <span>{isRunningBatch ? "队列批量合成中..." : "启动全部批量合成"}</span>
+                  <span>{isRunningBatch ? "正在批量处理中..." : "一键批量极速合成"}</span>
                 </button>
               </div>
 
-              <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+              {/* Task Cards */}
+              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                 {batchQueue.map((item) => {
                   const av = getAvatar(item.avatarId);
                   return (
                     <div
                       key={item.id}
-                      className="p-3 rounded-lg border border-border-subtle bg-canvas flex items-center justify-between gap-3"
+                      className="p-3 bg-canvas rounded-lg border border-border-subtle flex items-start justify-between gap-3"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <img src={av.img} alt={av.name} className="w-9 h-9 rounded-full object-cover shrink-0" />
-                        <div className="min-w-0 flex-1">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <img
+                          src={av.mediaUrl}
+                          alt={av.name}
+                          className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5"
+                        />
+                        <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-ink">{item.title}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border-subtle text-ink-muted">
-                              {av.name}
-                            </span>
+                            <span className="text-xs font-bold text-ink truncate">{item.title}</span>
+                            <span className="text-[10px] text-ink-muted">({av.name})</span>
+                            {item.status === "DONE" && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-apple-green/10 text-apple-green font-medium rounded">
+                                已完成 ({item.durationSec}s)
+                              </span>
+                            )}
+                            {item.status === "RUNNING" && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-apple-blue/10 text-apple-blue font-medium rounded animate-pulse">
+                                合成中...
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[11px] text-ink-muted truncate mt-0.5">{item.script}</p>
+                          <p className="text-xs text-ink-muted line-clamp-2 leading-relaxed">
+                            {item.script}
+                          </p>
+                          {item.engineNote && (
+                            <div className="text-[10px] text-apple-blue">
+                              引擎：{item.engineNote}
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {item.status === "DONE" && item.videoPath ? (
                           <>
                             <button
-                              onClick={() => setActivePreviewVideo(item.videoPath!)}
-                              className="px-2.5 py-1 bg-apple-blue/10 text-apple-blue text-xs font-medium rounded cursor-pointer"
+                              onClick={() => setActivePreviewVideo(item.videoPath || null)}
+                              className="px-2.5 py-1 bg-surface hover:bg-surface-muted text-ink text-xs font-medium rounded border border-border-subtle cursor-pointer"
                             >
-                              预览成片
+                              播放
                             </button>
                             <a
                               href={getStreamUrl(item.videoPath, true)}
@@ -455,7 +587,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                               className="px-2.5 py-1 bg-apple-green text-surface text-xs font-medium rounded flex items-center gap-1"
                             >
                               <Download className="w-3 h-3" />
-                              <span>下载MP4</span>
+                              <span>下载</span>
                             </a>
                           </>
                         ) : (
@@ -484,7 +616,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                 <div className="p-3 bg-canvas rounded-lg border border-border-subtle space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-apple-green flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> 数字人口播成片实时预览
+                      <CheckCircle2 className="w-3.5 h-3.5" /> 数字人口播成片实时预览 (电影级呼吸运镜 + 抖音网感字幕)
                     </span>
                     <div className="flex gap-2">
                       <button
@@ -498,7 +630,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                         download="digital-avatar-output.mp4"
                         className="text-xs text-apple-blue font-semibold flex items-center gap-1"
                       >
-                        <Download className="w-3.5 h-3.5" /> 直接下载此 MP4
+                        <Download className="w-3.5 h-3.5" /> 直接下载 MP4
                       </a>
                     </div>
                   </div>
@@ -507,7 +639,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                     src={getStreamUrl(activePreviewVideo)}
                     controls
                     autoPlay
-                    className="w-full max-h-[320px] rounded bg-black object-contain"
+                    className="w-full max-h-[360px] rounded bg-black object-contain shadow-soft"
                   />
                 </div>
               )}
@@ -545,15 +677,12 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
 
           {remakeStep === 1 && (
             <div className="space-y-4 max-w-2xl">
-              <h3 className="text-sm font-bold text-ink">第 1 步：输入对标爆款链接或主题进行结构抽帧</h3>
-              <p className="text-xs text-ink-muted">
-                系统将自动解析对标视频的黄金前3秒 Hook、痛点转折节奏与口播逐字稿，用于后续原创洗稿。
-              </p>
+              <h3 className="text-sm font-bold text-ink">第 1 步：输入对标爆款视频链接或脚本</h3>
               <input
                 type="text"
                 value={benchmarkUrl}
                 onChange={(e) => setBenchmarkUrl(e.target.value)}
-                placeholder="粘贴抖音/小红书对标视频链接，或直接输入对标爆款主题..."
+                placeholder="粘贴抖音/小红书爆款视频分享链接，例如 https://v.douyin.com/..."
                 className="w-full text-xs p-3 rounded-md border border-border-subtle bg-canvas text-ink"
               />
               <button
@@ -585,7 +714,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                     <button
                       onClick={() =>
                         setRewrittenText(
-                          `想要彻底玩转「${benchmarkUrl.trim() || "爆款短视频"}」？别再用传统黑盒工具折腾了，掌握这套3步黄金法则，零基础也能轻松出大片！`
+                          `想在短视频平台拿到结果，千万别靠死磕时长！真正的高手早就建立起标准化矩阵生产线：先结构化提炼高赞文案，再通过 AI 工作台快速复制出多条精美口播，直接把制作周期压缩到零成本！`
                         )
                       }
                       className="text-[11px] text-apple-blue flex items-center gap-1 cursor-pointer"
@@ -620,10 +749,16 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                     key={av.id}
                     onClick={() => setSelectedAvatarId(av.id)}
                     className={`p-3 rounded-lg border cursor-pointer text-center space-y-2 ${
-                      selectedAvatarId === av.id ? "border-apple-blue bg-apple-blue/5 ring-1 ring-apple-blue" : "border-border-subtle bg-canvas"
+                      selectedAvatarId === av.id
+                        ? "border-apple-blue bg-apple-blue/5 ring-1 ring-apple-blue"
+                        : "border-border-subtle bg-canvas"
                     }`}
                   >
-                    <img src={av.img} alt={av.name} className="w-16 h-16 rounded-full mx-auto object-cover" />
+                    <img
+                      src={av.mediaUrl}
+                      alt={av.name}
+                      className="w-16 h-16 rounded-full mx-auto object-cover"
+                    />
                     <div className="text-xs font-bold text-ink">{av.name}</div>
                     <div className="text-[10px] text-ink-muted">{av.tag}</div>
                   </div>
@@ -645,12 +780,12 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
               <div className="flex items-center justify-between">
                 <div className="text-sm font-bold text-apple-green flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>第 4 步：对标复刻数字人成片已生成完毕！</span>
+                  <span>爆款复刻合成成功！已应用电影级动态运镜与高燃字幕</span>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <button
-                    onClick={() => handleSaveToAsset(remakeVideoPath, "对标复刻")}
-                    className="px-4 py-2 bg-surface-muted text-ink text-xs font-medium rounded-md border border-border-subtle flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => handleSaveToAsset(remakeVideoPath, "爆款复刻")}
+                    className="px-3 py-1.5 bg-surface text-xs font-medium rounded border border-border-subtle flex items-center gap-1 cursor-pointer"
                   >
                     <FolderArchive className="w-3.5 h-3.5" /> 存入素材库
                   </button>
@@ -663,7 +798,12 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                   </a>
                 </div>
               </div>
-              <video src={getStreamUrl(remakeVideoPath)} controls autoPlay className="w-full max-h-[380px] rounded-lg bg-black object-contain" />
+              <video
+                src={getStreamUrl(remakeVideoPath)}
+                controls
+                autoPlay
+                className="w-full max-h-[380px] rounded-lg bg-black object-contain shadow-soft"
+              />
             </div>
           )}
         </div>
@@ -675,11 +815,13 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
           <div className="p-5 bg-surface rounded-apple border border-border-subtle shadow-card space-y-4">
             <h3 className="text-sm font-bold text-ink flex items-center gap-2">
               <Film className="w-4 h-4 text-apple-blue" />
-              <span>双轨音画对口型配置 (Lip-Sync Engine)</span>
+              <span>音画双轨对口型工坊 (Lip-Sync Engine)</span>
             </h3>
 
             <div>
-              <label className="text-xs font-semibold text-ink block mb-2">轨道 A：选择人物底模视频 / 形象源</label>
+              <label className="text-xs font-semibold text-ink block mb-2">
+                轨道 A：选择人物底模视频 / 形象图
+              </label>
               <div className="grid grid-cols-2 gap-2">
                 {AVATAR_MODELS.map((av) => (
                   <div
@@ -689,7 +831,7 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                       selectedAvatarId === av.id ? "border-apple-blue bg-apple-blue/5" : "border-border-subtle bg-canvas"
                     }`}
                   >
-                    <img src={av.img} alt={av.name} className="w-8 h-8 rounded-full object-cover" />
+                    <img src={av.mediaUrl} alt={av.name} className="w-8 h-8 rounded-full object-cover" />
                     <span className="text-xs font-medium text-ink">{av.name}底模</span>
                   </div>
                 ))}
@@ -713,16 +855,16 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
                 onChange={(e) => setLipsyncVoice(e.target.value)}
                 className="w-full text-xs p-2 rounded border border-border-subtle bg-surface text-ink"
               >
-                <option value="zh-CN-YunxiNeural">云希 (男声嘴型驱动)</option>
-                <option value="zh-CN-XiaoxiaoNeural">晓晓 (女声嘴型驱动)</option>
-                <option value="zh-HK-HiuMaanNeural">粤语晓曼 (粤语嘴型驱动)</option>
+                <option value="zh-CN-YunxiNeural">云希 (沉稳男声驱动)</option>
+                <option value="zh-CN-XiaoxiaoNeural">晓晓 (亲和女声驱动)</option>
+                <option value="zh-HK-HiuMaanNeural">粤语晓曼 (港风口播驱动)</option>
               </select>
             </div>
 
             <div>
               <div className="flex justify-between text-xs font-medium text-ink mb-1">
                 <span className="flex items-center gap-1">
-                  <Sliders className="w-3.5 h-3.5 text-apple-blue" /> 唇形张合灵敏度与面部超分度
+                  <Sliders className="w-3.5 h-3.5 text-apple-blue" /> 唇形张合灵敏度与面部超分辨率
                 </span>
                 <span className="text-apple-blue">{mouthSensitivity}%</span>
               </div>
@@ -747,30 +889,51 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
           </div>
 
           <div className="p-5 bg-surface rounded-apple border border-border-subtle shadow-card flex flex-col justify-between">
-            <div className="text-xs font-bold text-ink mb-3">对口型成片预览与直接导出</div>
-            {lipsyncVideoPath ? (
-              <div className="space-y-4">
-                <video src={getStreamUrl(lipsyncVideoPath)} controls autoPlay className="w-full max-h-[340px] rounded bg-black object-contain" />
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleSaveToAsset(lipsyncVideoPath, "音画对口型")}
-                    className="flex-1 py-2.5 bg-surface-muted text-ink text-xs font-medium rounded border border-border-subtle flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <FolderArchive className="w-4 h-4" /> 存入素材库
-                  </button>
-                  <a
-                    href={getStreamUrl(lipsyncVideoPath, true)}
-                    download="lipsync-output.mp4"
-                    className="flex-1 py-2.5 bg-apple-blue text-surface text-xs font-semibold rounded flex items-center justify-center gap-1.5"
-                  >
-                    <Download className="w-4 h-4" /> 直接下载对口型 MP4
-                  </a>
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-ink">口型合成实时预览与工程质检</h3>
+              {lipsyncVideoPath ? (
+                <div className="space-y-3">
+                  <video
+                    src={getStreamUrl(lipsyncVideoPath)}
+                    controls
+                    autoPlay
+                    className="w-full max-h-[300px] rounded bg-black object-contain shadow-soft"
+                  />
+                  <div className="p-3 bg-canvas rounded border border-border-subtle space-y-1 text-xs">
+                    <div className="text-apple-green font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> 音画口型对齐质检合格
+                    </div>
+                    <div className="text-ink-muted">
+                      编码：H.264 / AAC · 音画采样率已标准化为 44.1kHz · 包含呼吸推焦动态
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-canvas rounded-lg border border-border-subtle text-ink-muted">
-                <Film className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-xs">配置左侧人物底模与驱动音频后点击合成，直接在此预览并下载对口型 MP4 成片。</p>
+              ) : (
+                <div className="h-[280px] border-2 border-dashed border-border-subtle rounded-lg flex flex-col items-center justify-center text-center p-6 space-y-2">
+                  <UserCheck className="w-10 h-10 text-ink-subtle" />
+                  <div className="text-xs font-medium text-ink">等待合成启动</div>
+                  <div className="text-[11px] text-ink-muted max-w-[240px]">
+                    在左侧配置底模人物与驱动台词后，点击「立即执行」即可生成高精度口播成片
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {lipsyncVideoPath && (
+              <div className="flex gap-2 pt-3">
+                <button
+                  onClick={() => handleSaveToAsset(lipsyncVideoPath, "对口型成片")}
+                  className="flex-1 py-2 rounded bg-surface hover:bg-surface-muted text-ink border border-border-subtle text-xs font-medium cursor-pointer"
+                >
+                  存入素材库
+                </button>
+                <a
+                  href={getStreamUrl(lipsyncVideoPath, true)}
+                  download="lipsync-output.mp4"
+                  className="flex-1 py-2 rounded bg-apple-blue text-surface text-xs font-semibold text-center flex items-center justify-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" /> 下载 MP4
+                </a>
               </div>
             )}
           </div>

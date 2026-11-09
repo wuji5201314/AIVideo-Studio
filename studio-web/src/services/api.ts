@@ -188,6 +188,11 @@ export const api = {
   // Operators
   listOperators: () => request<OperatorMeta[]>("/api/v2/operators"),
 
+  getHeyGemStatus: () =>
+    request<{ available: boolean; base_url: string; mode: string; description: string }>(
+      "/api/v2/operators/heygem/status"
+    ),
+
   executeOperator: <TOutput = unknown>(
     opId: string,
     inputData: Record<string, unknown>,

@@ -24,6 +24,21 @@ async def list_operators() -> ResultEnvelope[List[Dict[str, Any]]]:
     return ResultEnvelope.success(ops)
 
 
+@router.get("/heygem/status", response_model=ResultEnvelope[Dict[str, Any]])
+async def check_heygem_status() -> ResultEnvelope[Dict[str, Any]]:
+    """Probe if local HeyGem (Duix) neural lip-sync engine is online."""
+    from packages.studio_engine.heygem_client import HeyGemClient
+
+    client = HeyGemClient()
+    available = client.is_available()
+    return ResultEnvelope.success({
+        "available": available,
+        "base_url": client.base_url,
+        "mode": "heygem_lipsync" if available else "dynamic_presenter",
+        "description": "HeyGem 旗博士神经网络口型引擎已就绪" if available else "本地电影级动态运镜 + 高燃网感字幕就绪",
+    })
+
+
 @router.get("/{op_id}", response_model=ResultEnvelope[Dict[str, Any]])
 async def get_operator(op_id: str) -> ResultEnvelope[Dict[str, Any]]:
     """Get metadata for a specific operator."""
