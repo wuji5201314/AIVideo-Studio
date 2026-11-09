@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AppShell } from "./components/layout/AppShell";
 import { WorkflowStudioView } from "./components/workflow/WorkflowStudioView";
 import { SchemaToolView } from "./components/tools/SchemaToolView";
+import { AvatarStudioView } from "./components/tools/AvatarStudioView";
 import { AssetLibraryView } from "./components/tools/AssetLibraryView";
 import { HomeDashboardView } from "./components/home/HomeDashboardView";
 import { MODULES_REGISTRY } from "./config/modulesRegistry";
@@ -53,13 +54,17 @@ export function App() {
       return <AssetLibraryView onSendToWorkbench={handleSendToWorkbench} />;
     }
 
-    // If active tool is selected, render SchemaToolView or WorkflowStudioView
+    // If active tool is selected, render dedicated Studio View
     if (activeTool) {
-      if (activeTool.id === "workbench_12nodes") {
+      if (activeTool.id === "workbench_12nodes" || activeTool.id === "quick_workbench") {
         return <WorkflowStudioView initialSeed={workbenchSeed} />;
+      }
+      if (activeTool.id.startsWith("avatar_")) {
+        return <AvatarStudioView key={activeTool.id} initialToolId={activeTool.id} />;
       }
       return (
         <SchemaToolView
+          key={activeTool.id}
           toolId={activeTool.id}
           toolName={activeTool.name}
           description={activeTool.description}
@@ -84,7 +89,7 @@ export function App() {
             <span className="text-xs text-ink-muted">/ {currentModule.subtitle}</span>
           </div>
           <p className="text-xs text-ink-muted">
-            选择下方子功能直接使用，或产出后一键送入成片工作台
+            每个子功能均配备独立专属工坊与定制化处理流，直接产出并下载成品文件（MP4 / PNG / MP3）
           </p>
         </div>
 

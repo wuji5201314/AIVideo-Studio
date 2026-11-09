@@ -110,11 +110,12 @@ export const API_BASE =
     ? ""
     : "http://127.0.0.1:8010";
 
-export function getStreamUrl(pathOrSha256: string): string {
+export function getStreamUrl(pathOrSha256: string, download = false): string {
+  const dlParam = download ? "&download=1" : "";
   if (/^[a-fA-F0-9]{64}$/.test(pathOrSha256)) {
-    return `${API_BASE}/api/v2/assets/stream?sha256=${encodeURIComponent(pathOrSha256)}`;
+    return `${API_BASE}/api/v2/assets/stream?sha256=${encodeURIComponent(pathOrSha256)}${dlParam}`;
   }
-  return `${API_BASE}/api/v2/assets/stream?path=${encodeURIComponent(pathOrSha256)}`;
+  return `${API_BASE}/api/v2/assets/stream?path=${encodeURIComponent(pathOrSha256)}${dlParam}`;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
