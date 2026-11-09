@@ -635,29 +635,52 @@ export const SchemaToolView: React.FC<SchemaToolViewProps> = ({
             {outputMedia ? (
               <div className="w-full h-full flex flex-col items-center justify-center">
                 {mediaType === "audio" && (
-                  <>
-                    <audio ref={audioRef} src={streamUrl} onEnded={() => setIsPlaying(false)} className="hidden" />
+                  <div className="w-full flex flex-col items-center justify-center p-4">
                     <button
+                      type="button"
                       onClick={handleTogglePlay}
-                      className="w-16 h-16 rounded-full bg-apple-green/10 text-apple-green flex items-center justify-center mb-3 shadow-soft hover:scale-105 transition-all cursor-pointer"
+                      className="w-16 h-16 rounded-full bg-apple-green/10 text-apple-green hover:bg-apple-green/20 flex items-center justify-center mb-3 shadow-soft hover:scale-105 transition-all cursor-pointer"
+                      title={isPlaying ? "暂停" : "播放"}
                     >
                       {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
                     </button>
-                    <div className="text-xs font-semibold text-ink">高保真语音已合成就绪，点击上方按钮试听</div>
-                  </>
+                    <div className="text-xs font-semibold text-ink mb-1">
+                      {isPlaying ? "正在播放高保真音频..." : "语音合成成功，点击上方按钮或下方播放器试听"}
+                    </div>
+                    <div className="text-[11px] text-ink-muted mb-4 font-mono truncate max-w-sm">
+                      {outputMedia.split(/[\\/]/).pop()}
+                    </div>
+                    <audio
+                      key={streamUrl}
+                      ref={audioRef}
+                      src={streamUrl}
+                      controls
+                      preload="auto"
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                      onEnded={() => setIsPlaying(false)}
+                      className="w-full max-w-md shadow-sm rounded-lg"
+                    />
+                  </div>
                 )}
                 {mediaType === "image" && (
                   <img src={streamUrl} alt="Generated Cover" className="max-h-[380px] rounded-lg shadow-soft object-contain" />
                 )}
                 {mediaType === "video" && (
-                  <video
-                    key={streamUrl}
-                    ref={videoRef}
-                    src={streamUrl}
-                    controls
-                    autoPlay
-                    className="max-h-[380px] max-w-full rounded-lg bg-black object-contain"
-                  />
+                  <div className="w-full flex flex-col items-center">
+                    <video
+                      key={streamUrl}
+                      ref={videoRef}
+                      src={streamUrl}
+                      controls
+                      playsInline
+                      preload="auto"
+                      className="max-h-[380px] max-w-full rounded-lg bg-black object-contain shadow-soft"
+                    />
+                    <div className="text-[11px] text-ink-muted mt-2 font-mono truncate max-w-sm">
+                      {outputMedia.split(/[\\/]/).pop()}
+                    </div>
+                  </div>
                 )}
               </div>
             ) : outputShots ? (

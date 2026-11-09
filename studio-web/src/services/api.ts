@@ -106,8 +106,8 @@ export interface WorkbenchSeed {
 }
 
 export const API_BASE =
-  typeof window !== "undefined" && window.location.port === "5173"
-    ? ""
+  typeof window !== "undefined"
+    ? `http://${window.location.hostname || "127.0.0.1"}:8010`
     : "http://127.0.0.1:8010";
 
 export function getStreamUrl(pathOrSha256: string, download = false): string {
