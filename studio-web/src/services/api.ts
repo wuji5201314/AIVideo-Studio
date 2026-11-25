@@ -105,6 +105,69 @@ export interface WorkbenchSeed {
   sourceToolName?: string;
 }
 
+export interface AvatarBackendHealth {
+  backend_id: string;
+  label: string;
+  available: boolean;
+  endpoint: string;
+  detail: string;
+}
+
+export interface AvatarEngineSettings {
+  active_backend: string;
+  comfyui_url: string;
+  wan_worker_url: string;
+  dashscope_api_key: string;
+  has_dashscope_key?: boolean;
+  use_relighting_lora: boolean;
+  default_resolution: string;
+  default_voice: string;
+}
+
+export interface AvatarEnginesResponse {
+  settings: AvatarEngineSettings;
+  backends: AvatarBackendHealth[];
+  resolved_backend: string;
+  resolved_label: string;
+}
+
+export interface BenchmarkParseResult {
+  title: string;
+  share_url: string;
+  local_video_path: string;
+  scene_video_path: string;
+  scene_preview_image: string;
+  duration_sec: number;
+  download_succeeded: boolean;
+  source_type: string;
+  warning_note: string;
+  original_script: string;
+  rewritten_script: string;
+}
+
+export interface AvatarTaskResult {
+  video_path: string;
+  audio_path: string;
+  duration_sec: number;
+  mode: string;
+  sub_mode: string;
+  backend_id: string;
+  is_neural_wan: boolean;
+  content_hash: string;
+  engine_note: string;
+}
+
+export interface AvatarTaskStatus {
+  task_id: string;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
+  stage: string;
+  progress: number;
+  message: string;
+  logs: string[];
+  result: AvatarTaskResult | null;
+  error: string | null;
+}
+
 export const API_BASE =
   typeof window !== "undefined"
     ? `http://${window.location.hostname || "127.0.0.1"}:8010`
@@ -222,4 +285,48 @@ export const api = {
         body: JSON.stringify(payload),
       }
     ),
+
+  // Avatar & Wan2.2-Animate Studio
+  uploadAvatarMedia: async (file: File, kind: "video" | "image" | "audio") => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("kind", kind);
+    const resp = await fetch(`${API_BASE}/api/v2/avatar/upload`, {
+      method: "POST",
+      body: form,
+    });
+    const body: ResultEnvelope<{
+      file_path: string;
+      filename: string;
+      kind: string;
+      size_bytes: number;
+    }> = await resp.json();
+    if (body.code !== "00000") {
+      throw new Error(`[${body.code}] ${body.message}`);
+    }
+    return body.data;
+  },
+
+  parseBenchmarkVideo: (payload: { share_url?: string; local_video_path?: string }) =>
+    request<BenchmarkParseResult>("/api/v2/avatar/benchmark/parse", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getAvatarEngines: () => request<AvatarEnginesResponse>("/api/v2/avatar/engines"),
+
+  updateAvatarEngines: (patch: Partial<AvatarEngineSettings>) =>
+    request<AvatarEnginesResponse>("/api/v2/avatar/engines", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+
+  submitAvatarTask: (payload: Record<string, unknown>) =>
+    request<{ task_id: string; status: string }>("/api/v2/avatar/tasks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getAvatarTask: (taskId: string) =>
+    request<AvatarTaskStatus>(`/api/v2/avatar/tasks/${encodeURIComponent(taskId)}`),
 };

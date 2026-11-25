@@ -26,6 +26,7 @@ from controllers import (
     ResultEnvelope,
     StudioBaseError,
     asset_router,
+    avatar_router,
     operator_router,
     workflow_router,
 )
@@ -71,6 +72,7 @@ async def handle_general_exception(request: Request, exc: Exception) -> JSONResp
 app.include_router(workflow_router)
 app.include_router(operator_router)
 app.include_router(asset_router)
+app.include_router(avatar_router)
 
 
 @app.get("/health", response_model=ResultEnvelope[dict])

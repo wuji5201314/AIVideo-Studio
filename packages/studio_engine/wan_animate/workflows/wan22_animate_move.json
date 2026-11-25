@@ -1,0 +1,75 @@
+{
+  "1": {
+    "class_type": "VHS_LoadVideo",
+    "inputs": {
+      "video": "__DRIVING_VIDEO__",
+      "force_rate": 24,
+      "frame_load_cap": 161,
+      "skip_first_frames": 0,
+      "select_every_nth": 1
+    },
+    "_meta": { "title": "Load Driving Video" }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "__CHARACTER_IMAGE__"
+    },
+    "_meta": { "title": "Load Target Character Portrait" }
+  },
+  "3": {
+    "class_type": "DWPreprocessor",
+    "inputs": {
+      "image": ["1", 0],
+      "detect_hand": "enable",
+      "detect_body": "enable",
+      "detect_face": "enable",
+      "resolution": 720
+    },
+    "_meta": { "title": "DWPose Skeleton & Face Extraction" }
+  },
+  "5": {
+    "class_type": "WanVideoModelLoader",
+    "inputs": {
+      "model": "Wan2_2-Animate-14B_fp8_e4m3fn_scaled_KJ.safetensors",
+      "base_precision": "bf16",
+      "quantization": "fp8_e4m3fn",
+      "load_device": "offload_device",
+      "attention_mode": "sdpa"
+    },
+    "_meta": { "title": "Load Wan2.2-Animate-14B FP8" }
+  },
+  "7": {
+    "class_type": "WanVideoAnimateEmbeds",
+    "inputs": {
+      "mode": "move",
+      "ref_image": ["2", 0],
+      "pose_images": ["3", 0],
+      "width": 720,
+      "height": 1280
+    },
+    "_meta": { "title": "Wan2.2-Animate Move Conditioning" }
+  },
+  "8": {
+    "class_type": "WanVideoSampler",
+    "inputs": {
+      "model": ["5", 0],
+      "embeds": ["7", 0],
+      "steps": 20,
+      "cfg": 1.0,
+      "shift": 5.0,
+      "seed": 42
+    },
+    "_meta": { "title": "Wan2.2-Animate Sampler" }
+  },
+  "9": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["8", 0],
+      "frame_rate": 24,
+      "format": "video/h264-mp4",
+      "filename_prefix": "wan22_animate_move"
+    },
+    "_meta": { "title": "Save Animated Video" }
+  }
+}
