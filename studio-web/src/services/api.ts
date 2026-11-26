@@ -168,6 +168,23 @@ export interface AvatarTaskStatus {
   error: string | null;
 }
 
+export interface CloudApiSettings {
+  global_base_url: string;
+  global_api_key: string;
+  llm_base_url: string;
+  llm_api_key: string;
+  llm_model: string;
+  image_base_url: string;
+  image_api_key: string;
+  image_model: string;
+  video_base_url: string;
+  video_api_key: string;
+  video_model: string;
+  llm_ready?: boolean;
+  image_ready?: boolean;
+  video_ready?: boolean;
+}
+
 export const API_BASE =
   typeof window !== "undefined"
     ? `http://${window.location.hostname || "127.0.0.1"}:8010`
@@ -349,4 +366,18 @@ export const api = {
     a.remove();
     URL.revokeObjectURL(url);
   },
+
+  // Global OpenAI-compatible Cloud API Settings
+  getCloudApiSettings: () => request<CloudApiSettings>("/api/v2/settings/api"),
+
+  updateCloudApiSettings: (patch: Partial<CloudApiSettings>) =>
+    request<CloudApiSettings>("/api/v2/settings/api", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+
+  testCloudApiConnection: () =>
+    request<{ ok: boolean; message: string; latency_ms: number }>("/api/v2/settings/api/test", {
+      method: "POST",
+    }),
 };

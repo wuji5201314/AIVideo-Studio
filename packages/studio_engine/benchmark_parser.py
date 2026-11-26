@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _SHARE_PATTERNS = [
     re.compile(r"https?://v\.douyin\.com/[A-Za-z0-9_\-]+/?", re.I),
-    re.compile(r"https?://www\.douyin\.com/video/\d+", re.I),
+    re.compile(r"https?://(?:www\.)?(?:ies)?douyin\.com/(?:share/)?(?:video|note)/\d+/?", re.I),
     re.compile(r"https?://v\.kuaishou\.com/[A-Za-z0-9_\-]+/?", re.I),
     re.compile(r"https?://xhslink\.com/[A-Za-z0-9_\-]+/?", re.I),
     re.compile(r"https?://www\.bilibili\.com/video/[A-Za-z0-9]+", re.I),
@@ -91,15 +91,21 @@ class BenchmarkParser:
             if title == "对标爆款实景口播视频":
                 title = Path(video_path).stem
         elif url:
-            video_path = self._download_video(url, task_id)
+            video_path, dl_err = self._download_video(url, task_id)
             if video_path and os.path.isfile(video_path):
                 download_succeeded = True
                 source_type = "link"
             else:
+                reason = f"（原因：{dl_err}）" if dl_err else ""
                 warning_note = (
-                    "该平台短链触发了防盗链/Cookie 验证，无法直接拉取原视频流。"
-                    "请点击「上传本地原片 MP4」导入下载好的原视频，即可 100% 保留原片场景进行人物替换。"
+                    f"链接 {url} 暂未能直接拉取原视频流{reason}。"
+                    "请检查链接是否完整，或点击「上传本地原片 MP4」导入原视频，即可 100% 保留原片场景进行人物替换。"
                 )
+        else:
+            warning_note = (
+                "未在输入文本中识别到有效视频链接（例如 https://v.douyin.com/...）。"
+                "请粘贴完整分享口令，或直接点击「上传本地 MP4」导入原视频。"
+            )
 
         if not video_path or not os.path.isfile(video_path):
             video_path = self._create_scene_placeholder(task_id)
@@ -125,17 +131,18 @@ class BenchmarkParser:
             rewritten_script=rewritten_script,
         )
 
-    def _download_video(self, url: str, task_id: str) -> str:
+    def _download_video(self, url: str, task_id: str) -> Tuple[str, str]:
         """Download video via Douyin mobile share resolver, python -m yt_dlp, or direct FFmpeg."""
         out_target = str(self.output_dir / f"benchmark_{task_id}.mp4")
+        errors: list[str] = []
 
-        # 1. Native zero-cookie Douyin mobile share resolver (fast & watermark-free)
         if "douyin.com" in url.lower():
-            dl = self._download_douyin_mobile(url, out_target)
+            dl, err = self._download_douyin_mobile(url, out_target)
             if dl:
-                return dl
+                return dl, ""
+            if err:
+                errors.append(f"Douyin直连:{err}")
 
-        # 2. Open-source yt-dlp invoked via current venv Python (avoids PATH lookup failures)
         cmd = [
             sys.executable, "-m", "yt_dlp",
             "--no-playlist",
@@ -146,24 +153,25 @@ class BenchmarkParser:
             url,
         ]
         try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=35.0)
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=35.0)
             if res.returncode == 0 and os.path.exists(out_target) and os.path.getsize(out_target) > 5000:
-                return out_target
-        except Exception:
-            pass
+                return out_target, ""
+            err_line = (res.stderr or "").strip().splitlines()[-1] if (res.stderr or "").strip() else f"rc={res.returncode}"
+            errors.append(f"yt-dlp:{err_line[:90]}")
+        except Exception as exc:
+            errors.append(f"yt-dlp:{type(exc).__name__}")
 
-        # 3. Direct media URL fallback
         if any(ext in url.lower() for ext in (".mp4", ".mov", ".webm", ".m3u8")):
             cmd2 = ["ffmpeg", "-y", "-i", url, "-t", "30", "-c", "copy", out_target]
             try:
                 res2 = subprocess.run(cmd2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=25.0)
                 if res2.returncode == 0 and os.path.exists(out_target) and os.path.getsize(out_target) > 5000:
-                    return out_target
-            except Exception:
-                pass
-        return ""
+                    return out_target, ""
+            except Exception as exc:
+                errors.append(f"ffmpeg:{type(exc).__name__}")
+        return "", " ; ".join(errors)
 
-    def _download_douyin_mobile(self, share_url: str, out_target: str) -> str:
+    def _download_douyin_mobile(self, share_url: str, out_target: str) -> Tuple[str, str]:
         """Resolve v.douyin.com short link via mobile share HTML _ROUTER_DATA without cookies."""
         mobile_ua = (
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
@@ -175,7 +183,6 @@ class BenchmarkParser:
                 final_url = resp.geturl()
                 html = resp.read().decode("utf-8", errors="replace")
 
-            # If redirected to desktop URL, fetch mobile iesdouyin share page directly
             m_id = re.search(r"/(?:video|note)/(\d{10,})", final_url)
             if m_id and "iesdouyin.com/share/video/" not in final_url:
                 share_page = f"https://www.iesdouyin.com/share/video/{m_id.group(1)}/"
@@ -183,53 +190,72 @@ class BenchmarkParser:
                 with urllib.request.urlopen(req2, timeout=12.0) as resp2:
                     html = resp2.read().decode("utf-8", errors="replace")
 
-            # Parse window._ROUTER_DATA JSON embedded in mobile share HTML
-            m_json = re.search(r"window\._ROUTER_DATA\s*=\s*(\{.+?\})\s*</script>", html, re.S)
-            video_url = ""
+            candidates: list[str] = []
+            m_json = re.search(r"window\._ROUTER_DATA\s*=\s*(\{.+?\})\s*;?\s*</script>", html, re.S)
             if m_json:
                 data = json.loads(m_json.group(1))
-                video_url = self._find_play_url(data)
+                play_urls, vid_uri = self._extract_douyin_media(data)
+                for u in play_urls:
+                    candidates.append(u.replace("playwm", "play"))
+                    candidates.append(u)
+                if vid_uri:
+                    candidates.append(f"https://aweme.snssdk.com/aweme/v1/play/?video_id={vid_uri}&ratio=720p&line=0")
 
-            if not video_url:
+            if not candidates:
                 m_play = re.search(r'"url_list"\s*:\s*\[\s*"(https?://[^"]+)"', html)
                 if m_play:
-                    video_url = m_play.group(1).replace("\\u002F", "/").replace("\\/", "/")
+                    u = m_play.group(1).replace("\\u002F", "/").replace("\\/", "/")
+                    candidates.extend([u.replace("playwm", "play"), u])
 
-            if not video_url:
-                return ""
+            if not candidates:
+                if "region=US" in final_url or ("region=" in final_url and "region=CN" not in final_url):
+                    return "", "检测到代理走海外节点(region=US)，抖音已屏蔽视频流，请将代理切回规则模式(直连国内)或直接上传本地MP4"
+                return "", f"页面未包含视频流({final_url[:48]})"
 
-            video_url = video_url.replace("playwm", "play")
-            dl_req = urllib.request.Request(
-                video_url,
-                headers={"User-Agent": mobile_ua, "Referer": "https://www.douyin.com/"},
-            )
-            with urllib.request.urlopen(dl_req, timeout=40.0) as v_resp:
-                Path(out_target).write_bytes(v_resp.read())
+            last_err = ""
+            for cand in dict.fromkeys(candidates):
+                try:
+                    dl_req = urllib.request.Request(
+                        cand,
+                        headers={"User-Agent": mobile_ua, "Referer": "https://www.iesdouyin.com/", "Accept": "*/*"},
+                    )
+                    with urllib.request.urlopen(dl_req, timeout=35.0) as v_resp:
+                        ctype = (v_resp.headers.get("Content-Type") or "").lower()
+                        raw_bytes = v_resp.read()
+                    if len(raw_bytes) > 10_000 and "text/html" not in ctype:
+                        Path(out_target).write_bytes(raw_bytes)
+                        return out_target, ""
+                    last_err = f"非视频响应({ctype}, {len(raw_bytes)}B)"
+                except Exception as exc:
+                    last_err = f"{type(exc).__name__}:{exc}"
+            return "", last_err or "所有视频候选地址下载失败"
+        except Exception as exc:
+            return "", f"{type(exc).__name__}:{exc}"
 
-            if os.path.exists(out_target) and os.path.getsize(out_target) > 10_000:
-                return out_target
-        except Exception:
-            pass
-        return ""
-
-    def _find_play_url(self, node: object) -> str:
-        """Recursively find video.play_addr.url_list in Douyin _ROUTER_DATA."""
+    def _extract_douyin_media(self, node: object) -> Tuple[list[str], str]:
+        """Recursively extract video.play_addr.url_list and uri from Douyin _ROUTER_DATA."""
+        urls: list[str] = []
+        uri = ""
         if isinstance(node, dict):
             play_addr = node.get("play_addr")
             if isinstance(play_addr, dict):
-                urls = play_addr.get("url_list")
-                if isinstance(urls, list) and urls:
-                    return str(urls[0])
+                ul = play_addr.get("url_list")
+                if isinstance(ul, list):
+                    urls.extend(str(x) for x in ul if isinstance(x, str) and x.startswith("http"))
+                if not uri and isinstance(play_addr.get("uri"), str):
+                    uri = play_addr["uri"]
             for v in node.values():
-                found = self._find_play_url(v)
-                if found:
-                    return found
+                sub_urls, sub_uri = self._extract_douyin_media(v)
+                urls.extend(sub_urls)
+                if not uri and sub_uri:
+                    uri = sub_uri
         elif isinstance(node, list):
             for item in node:
-                found = self._find_play_url(item)
-                if found:
-                    return found
-        return ""
+                sub_urls, sub_uri = self._extract_douyin_media(item)
+                urls.extend(sub_urls)
+                if not uri and sub_uri:
+                    uri = sub_uri
+        return urls, uri
 
     def _extract_scene_video(self, src_video: str, task_id: str) -> str:
         """Extract normalized H.264 scene video without original voiceover."""

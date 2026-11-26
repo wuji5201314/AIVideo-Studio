@@ -11,6 +11,7 @@ import {
   FolderArchive,
   Search,
   Zap,
+  KeyRound,
 } from "lucide-react";
 import { MODULES_REGISTRY } from "../../config/modulesRegistry";
 import type { NavModule } from "../../config/modulesRegistry";
@@ -18,6 +19,8 @@ import type { NavModule } from "../../config/modulesRegistry";
 interface AppShellProps {
   currentModuleId: string;
   onSelectModule: (id: string) => void;
+  onOpenApiSettings: () => void;
+  apiReadyCount?: number;
   children: React.ReactNode;
 }
 
@@ -36,6 +39,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 export const AppShell: React.FC<AppShellProps> = ({
   currentModuleId,
   onSelectModule,
+  onOpenApiSettings,
+  apiReadyCount = 0,
   children,
 }) => {
   return (
@@ -108,12 +113,20 @@ export const AppShell: React.FC<AppShellProps> = ({
             </div>
           </div>
 
-          {/* Topbar Right Actions & Dynamic Island Task Capsule */}
+          {/* Topbar Right Actions & Global API Settings Button */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={onOpenApiSettings}
+              className="flex items-center gap-2 px-3 py-1.5 bg-surface hover:bg-surface-muted border border-border-subtle rounded-full text-xs shadow-soft cursor-pointer transition-colors"
+            >
+              <KeyRound className={`w-3.5 h-3.5 ${apiReadyCount > 0 ? "text-apple-green" : "text-apple-blue"}`} />
+              <span className="font-semibold text-[11px] text-ink">
+                {apiReadyCount > 0 ? `API 模型已就绪 (${apiReadyCount}/3)` : "配置 AI 模型 API Key"}
+              </span>
+            </button>
             <div className="flex items-center gap-2 px-3 py-1 bg-surface border border-border-subtle rounded-full text-xs shadow-soft">
               <Zap className="w-3.5 h-3.5 text-apple-amber" />
-              <span className="text-[11px] text-ink-muted">运行模式:</span>
-              <span className="font-medium text-[11px] text-ink">按功能自动</span>
+              <span className="text-[11px] text-ink-muted">云端 API 优先</span>
             </div>
           </div>
         </header>

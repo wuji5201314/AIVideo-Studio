@@ -79,6 +79,15 @@ export const MODULES_REGISTRY: NavModule[] = [
         isFreeLocal: false,
       },
       {
+        id: "cloud_video_gen",
+        name: "AI 电影级视频生成 (T2V / I2V)",
+        description: "直连云端 Wan2.2 / OpenAI 兼容 API 生成电影质感视频，0 显存",
+        badge: "云端大片",
+        badgeColor: "purple",
+        isFreeLocal: false,
+        operatorId: "op_cloud_video",
+      },
+      {
         id: "template_video_batch",
         name: "模板化批量视频生成",
         description: "按探店/干货/带货/图集4套标准模板，本机零成本批量直出MP4",

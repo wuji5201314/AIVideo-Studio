@@ -1,21 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "./components/layout/AppShell";
+import { ApiSettingsDrawer } from "./components/layout/ApiSettingsDrawer";
 import { WorkflowStudioView } from "./components/workflow/WorkflowStudioView";
 import { SchemaToolView } from "./components/tools/SchemaToolView";
 import { AvatarStudioView } from "./components/tools/AvatarStudioView";
 import { TemplateVideoStudioView } from "./components/tools/TemplateVideoStudioView";
 import { VideoEditorStudioView } from "./components/tools/VideoEditorStudioView";
+import { ImageStudioView } from "./components/tools/ImageStudioView";
+import { CloudVideoStudioView } from "./components/tools/CloudVideoStudioView";
 import { AssetLibraryView } from "./components/tools/AssetLibraryView";
 import { HomeDashboardView } from "./components/home/HomeDashboardView";
 import { MODULES_REGISTRY } from "./config/modulesRegistry";
 import type { SubTool } from "./config/modulesRegistry";
-import type { WorkbenchSeed } from "./services/api";
+import { api, type CloudApiSettings, type WorkbenchSeed } from "./services/api";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 export function App() {
-  const [currentModuleId, setCurrentModuleId] = useState<string>("03-video-gen");
+  const [currentModuleId, setCurrentModuleId] = useState<string>("02-avatar");
   const [activeTool, setActiveTool] = useState<SubTool | null>(null);
   const [workbenchSeed, setWorkbenchSeed] = useState<WorkbenchSeed | null>(null);
+  const [apiDrawerOpen, setApiDrawerOpen] = useState<boolean>(false);
+  const [cloudSettings, setCloudSettings] = useState<CloudApiSettings | null>(null);
+
+  useEffect(() => {
+    api.getCloudApiSettings().then(setCloudSettings).catch(() => null);
+  }, []);
+
+  const apiReadyCount =
+    (cloudSettings?.llm_ready ? 1 : 0) +
+    (cloudSettings?.image_ready ? 1 : 0) +
+    (cloudSettings?.video_ready ? 1 : 0);
 
   const currentModule =
     MODULES_REGISTRY.find((m) => m.id === currentModuleId) || MODULES_REGISTRY[0];
@@ -66,6 +80,12 @@ export function App() {
       }
       if (activeTool.id === "template_video_batch") {
         return <TemplateVideoStudioView key={activeTool.id} />;
+      }
+      if (activeTool.id === "cloud_video_gen") {
+        return <CloudVideoStudioView key={activeTool.id} onOpenApiSettings={() => setApiDrawerOpen(true)} />;
+      }
+      if (activeTool.id === "platform_cover") {
+        return <ImageStudioView key={activeTool.id} onOpenApiSettings={() => setApiDrawerOpen(true)} />;
       }
       if (
         activeTool.id === "cut_silence" ||
@@ -145,9 +165,21 @@ export function App() {
   };
 
   return (
-    <AppShell currentModuleId={currentModuleId} onSelectModule={handleSelectModule}>
-      {renderContent()}
-    </AppShell>
+    <>
+      <AppShell
+        currentModuleId={currentModuleId}
+        onSelectModule={handleSelectModule}
+        onOpenApiSettings={() => setApiDrawerOpen(true)}
+        apiReadyCount={apiReadyCount}
+      >
+        {renderContent()}
+      </AppShell>
+      <ApiSettingsDrawer
+        open={apiDrawerOpen}
+        onClose={() => setApiDrawerOpen(false)}
+        onSaved={(next) => setCloudSettings(next)}
+      />
+    </>
   );
 }
 

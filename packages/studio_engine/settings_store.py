@@ -39,6 +39,49 @@ class AvatarEngineSettings(BaseModel):
     default_voice: str = Field(default="zh-CN-XiaoxiaoNeural", description="Default TTS voice")
 
 
+class CloudApiSettings(BaseModel):
+    """Global OpenAI-compatible API configuration for LLM, Image, Video, and TTS."""
+
+    # Shared / Relay defaults (OneAPI / SiliconFlow / NewAPI / DashScope Compatible)
+    global_base_url: str = Field(default="https://api.siliconflow.cn/v1", description="Default OpenAI-compatible base URL")
+    global_api_key: str = Field(default="", description="Default API key shared across modules")
+
+    # LLM (Script, Rewrite, Storyboard)
+    llm_base_url: str = Field(default="", description="Optional override base URL for LLM")
+    llm_api_key: str = Field(default="", description="Optional override API key for LLM")
+    llm_model: str = Field(default="deepseek-ai/DeepSeek-V3", description="Chat model name")
+
+    # Image Generation (Covers, Storyboard visuals)
+    image_base_url: str = Field(default="", description="Optional override base URL for Image Gen")
+    image_api_key: str = Field(default="", description="Optional override API key for Image Gen")
+    image_model: str = Field(default="black-forest-labs/FLUX.1-schnell", description="Image model name")
+
+    # Video Generation (T2V / I2V / Wan2.2)
+    video_base_url: str = Field(default="", description="Optional override base URL for Video Gen")
+    video_api_key: str = Field(default="", description="Optional override API key for Video Gen")
+    video_model: str = Field(default="Wan-AI/Wan2.2-T2V-A14B", description="Video model name")
+
+    def resolve(self, kind: str) -> tuple[str, str, str]:
+        """Return effective (base_url, api_key, model) for llm | image | video."""
+        if kind == "llm":
+            return (
+                (self.llm_base_url or self.global_base_url).strip().rstrip("/"),
+                (self.llm_api_key or self.global_api_key).strip(),
+                self.llm_model.strip(),
+            )
+        if kind == "image":
+            return (
+                (self.image_base_url or self.global_base_url).strip().rstrip("/"),
+                (self.image_api_key or self.global_api_key).strip(),
+                self.image_model.strip(),
+            )
+        return (
+            (self.video_base_url or self.global_base_url).strip().rstrip("/"),
+            (self.video_api_key or self.global_api_key).strip(),
+            self.video_model.strip(),
+        )
+
+
 class SettingsStore:
     """SQLite key-value store for platform engine settings."""
 
@@ -114,4 +157,61 @@ class SettingsStore:
             data["dashscope_api_key"] = f"sk-***{raw_key[-4:]}"
         elif raw_key:
             data["dashscope_api_key"] = "sk-***"
+        return data
+
+    def get_cloud_api_settings(self) -> CloudApiSettings:
+        """Load persisted global OpenAI-compatible API settings."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT value_json FROM studio_settings WHERE key = ?",
+                ("cloud_api",),
+            ).fetchone()
+        if not row:
+            return CloudApiSettings()
+        try:
+            return CloudApiSettings.model_validate(json.loads(row["value_json"]))
+        except Exception:
+            return CloudApiSettings()
+
+    def save_cloud_api_settings(self, patch: Dict[str, Any]) -> CloudApiSettings:
+        """Merge partial updates into persisted CloudApiSettings (preserving masked keys)."""
+        current = self.get_cloud_api_settings().model_dump()
+        secret_fields = {"global_api_key", "llm_api_key", "image_api_key", "video_api_key"}
+        for k, v in patch.items():
+            if k in current and v is not None:
+                if k in secret_fields and isinstance(v, str) and v.startswith("sk-***"):
+                    continue
+                current[k] = v
+        updated = CloudApiSettings.model_validate(current)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO studio_settings (key, value_json, updated_at)
+                VALUES (?, ?, datetime('now'))
+                ON CONFLICT(key) DO UPDATE SET
+                    value_json = excluded.value_json,
+                    updated_at = datetime('now')
+                """,
+                ("cloud_api", updated.model_dump_json()),
+            )
+            conn.commit()
+        return updated
+
+    @staticmethod
+    def mask_cloud_api(settings: CloudApiSettings) -> Dict[str, Any]:
+        """Return API-safe dict with masked secrets and readiness flags."""
+        data = settings.model_dump()
+        for field in ("global_api_key", "llm_api_key", "image_api_key", "video_api_key"):
+            raw = data.get(field) or ""
+            data[f"has_{field}"] = bool(raw.strip())
+            if len(raw) > 8:
+                data[field] = f"sk-***{raw[-4:]}"
+            elif raw:
+                data[field] = "sk-***"
+        llm_u, llm_k, _ = settings.resolve("llm")
+        img_u, img_k, _ = settings.resolve("image")
+        vid_u, vid_k, _ = settings.resolve("video")
+        data["llm_ready"] = bool(llm_u and llm_k)
+        data["image_ready"] = bool(img_u and img_k)
+        data["video_ready"] = bool(vid_u and vid_k)
         return data
