@@ -7,6 +7,7 @@ Follows Alibaba Coding Guidelines:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
 from packages.studio_engine.settings_store import AvatarEngineSettings, SettingsStore
@@ -40,13 +41,11 @@ class WanAnimateRouter:
         }
 
     def probe_all(self) -> List[BackendHealth]:
-        """Probe all Wan2.2-Animate backends plus local low-spec engine."""
-        return [
-            self.backends["comfyui"].check_health(timeout=1.5),
-            self.backends["wan_worker"].check_health(timeout=1.5),
-            self.backends["dashscope"].check_health(timeout=1.5),
-            self.local_backend.check_health(timeout=1.5),
-        ]
+        """Probe all Wan2.2-Animate backends concurrently plus local low-spec engine."""
+        order = ("comfyui", "wan_worker", "dashscope", "local_fallback")
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futs = [pool.submit(self.backends[k].check_health, 0.8) for k in order]
+            return [f.result() for f in futs]
 
     def select_backend(self, preferred: Optional[str] = None) -> BaseWanAnimateBackend:
         """Pick the best available backend according to user preference or auto priority."""

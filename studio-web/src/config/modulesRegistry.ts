@@ -79,6 +79,15 @@ export const MODULES_REGISTRY: NavModule[] = [
         isFreeLocal: false,
       },
       {
+        id: "template_video_batch",
+        name: "模板化批量视频生成",
+        description: "按探店/干货/带货/图集4套标准模板，本机零成本批量直出MP4",
+        badge: "本机批量",
+        badgeColor: "green",
+        isFreeLocal: true,
+        operatorId: "op_template_video",
+      },
+      {
         id: "image_motion",
         name: "静图运镜（Ken Burns）",
         description: "零成本将静态图片转换为推拉摇移 7 种电影感镜头",

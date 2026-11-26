@@ -3,6 +3,8 @@ import { AppShell } from "./components/layout/AppShell";
 import { WorkflowStudioView } from "./components/workflow/WorkflowStudioView";
 import { SchemaToolView } from "./components/tools/SchemaToolView";
 import { AvatarStudioView } from "./components/tools/AvatarStudioView";
+import { TemplateVideoStudioView } from "./components/tools/TemplateVideoStudioView";
+import { VideoEditorStudioView } from "./components/tools/VideoEditorStudioView";
 import { AssetLibraryView } from "./components/tools/AssetLibraryView";
 import { HomeDashboardView } from "./components/home/HomeDashboardView";
 import { MODULES_REGISTRY } from "./config/modulesRegistry";
@@ -62,6 +64,16 @@ export function App() {
       if (activeTool.id.startsWith("avatar_")) {
         return <AvatarStudioView key={activeTool.id} initialToolId={activeTool.id} />;
       }
+      if (activeTool.id === "template_video_batch") {
+        return <TemplateVideoStudioView key={activeTool.id} />;
+      }
+      if (
+        activeTool.id === "cut_silence" ||
+        activeTool.id === "crop_vertical" ||
+        activeTool.id === "upscale_hd"
+      ) {
+        return <VideoEditorStudioView key={activeTool.id} initialToolId={activeTool.id} />;
+      }
       return (
         <SchemaToolView
           key={activeTool.id}
@@ -75,8 +87,8 @@ export function App() {
       );
     }
 
-    // Special case for video-gen default to flagship 12-nodes workbench
-    if (currentModuleId === "03-video-gen") {
+    // If a workbench seed was sent from another tool, jump straight into 12-nodes workbench
+    if (currentModuleId === "03-video-gen" && workbenchSeed) {
       return <WorkflowStudioView initialSeed={workbenchSeed} />;
     }
 
