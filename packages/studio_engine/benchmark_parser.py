@@ -8,9 +8,12 @@ Follows Alibaba Coding Guidelines:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
+import sys
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Optional, Tuple
@@ -123,11 +126,18 @@ class BenchmarkParser:
         )
 
     def _download_video(self, url: str, task_id: str) -> str:
-        """Attempt video download via open-source yt-dlp or direct FFmpeg stream dump."""
+        """Download video via Douyin mobile share resolver, python -m yt_dlp, or direct FFmpeg."""
         out_target = str(self.output_dir / f"benchmark_{task_id}.mp4")
 
+        # 1. Native zero-cookie Douyin mobile share resolver (fast & watermark-free)
+        if "douyin.com" in url.lower():
+            dl = self._download_douyin_mobile(url, out_target)
+            if dl:
+                return dl
+
+        # 2. Open-source yt-dlp invoked via current venv Python (avoids PATH lookup failures)
         cmd = [
-            "yt-dlp",
+            sys.executable, "-m", "yt_dlp",
             "--no-playlist",
             "--format", "mp4/best",
             "--user-agent",
@@ -136,12 +146,13 @@ class BenchmarkParser:
             url,
         ]
         try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30.0)
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=35.0)
             if res.returncode == 0 and os.path.exists(out_target) and os.path.getsize(out_target) > 5000:
                 return out_target
         except Exception:
             pass
 
+        # 3. Direct media URL fallback
         if any(ext in url.lower() for ext in (".mp4", ".mov", ".webm", ".m3u8")):
             cmd2 = ["ffmpeg", "-y", "-i", url, "-t", "30", "-c", "copy", out_target]
             try:
@@ -150,6 +161,74 @@ class BenchmarkParser:
                     return out_target
             except Exception:
                 pass
+        return ""
+
+    def _download_douyin_mobile(self, share_url: str, out_target: str) -> str:
+        """Resolve v.douyin.com short link via mobile share HTML _ROUTER_DATA without cookies."""
+        mobile_ua = (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        )
+        try:
+            req = urllib.request.Request(share_url, headers={"User-Agent": mobile_ua})
+            with urllib.request.urlopen(req, timeout=12.0) as resp:
+                final_url = resp.geturl()
+                html = resp.read().decode("utf-8", errors="replace")
+
+            # If redirected to desktop URL, fetch mobile iesdouyin share page directly
+            m_id = re.search(r"/(?:video|note)/(\d{10,})", final_url)
+            if m_id and "iesdouyin.com/share/video/" not in final_url:
+                share_page = f"https://www.iesdouyin.com/share/video/{m_id.group(1)}/"
+                req2 = urllib.request.Request(share_page, headers={"User-Agent": mobile_ua})
+                with urllib.request.urlopen(req2, timeout=12.0) as resp2:
+                    html = resp2.read().decode("utf-8", errors="replace")
+
+            # Parse window._ROUTER_DATA JSON embedded in mobile share HTML
+            m_json = re.search(r"window\._ROUTER_DATA\s*=\s*(\{.+?\})\s*</script>", html, re.S)
+            video_url = ""
+            if m_json:
+                data = json.loads(m_json.group(1))
+                video_url = self._find_play_url(data)
+
+            if not video_url:
+                m_play = re.search(r'"url_list"\s*:\s*\[\s*"(https?://[^"]+)"', html)
+                if m_play:
+                    video_url = m_play.group(1).replace("\\u002F", "/").replace("\\/", "/")
+
+            if not video_url:
+                return ""
+
+            video_url = video_url.replace("playwm", "play")
+            dl_req = urllib.request.Request(
+                video_url,
+                headers={"User-Agent": mobile_ua, "Referer": "https://www.douyin.com/"},
+            )
+            with urllib.request.urlopen(dl_req, timeout=40.0) as v_resp:
+                Path(out_target).write_bytes(v_resp.read())
+
+            if os.path.exists(out_target) and os.path.getsize(out_target) > 10_000:
+                return out_target
+        except Exception:
+            pass
+        return ""
+
+    def _find_play_url(self, node: object) -> str:
+        """Recursively find video.play_addr.url_list in Douyin _ROUTER_DATA."""
+        if isinstance(node, dict):
+            play_addr = node.get("play_addr")
+            if isinstance(play_addr, dict):
+                urls = play_addr.get("url_list")
+                if isinstance(urls, list) and urls:
+                    return str(urls[0])
+            for v in node.values():
+                found = self._find_play_url(v)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for item in node:
+                found = self._find_play_url(item)
+                if found:
+                    return found
         return ""
 
     def _extract_scene_video(self, src_video: str, task_id: str) -> str:

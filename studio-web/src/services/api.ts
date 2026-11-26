@@ -329,4 +329,24 @@ export const api = {
 
   getAvatarTask: (taskId: string) =>
     request<AvatarTaskStatus>(`/api/v2/avatar/tasks/${encodeURIComponent(taskId)}`),
+
+  downloadBatchZip: async (videoPaths: string[], archiveName = "batch-remake-outputs.zip") => {
+    const resp = await fetch(`${API_BASE}/api/v2/avatar/batch/zip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_paths: videoPaths, archive_name: archiveName }),
+    });
+    if (!resp.ok) {
+      throw new Error(`打包下载失败 (HTTP ${resp.status})`);
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = archiveName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };

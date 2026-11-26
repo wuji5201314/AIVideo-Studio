@@ -17,9 +17,11 @@ import asyncio
 import os
 import time
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, File, Form, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from controllers.envelope import ErrorCode, ResultEnvelope, StudioBaseError
@@ -145,6 +147,34 @@ async def submit_avatar_task(payload: AvatarInput) -> ResultEnvelope[Dict[str, A
 
     asyncio.create_task(_run_avatar_task(task_id, payload))
     return ResultEnvelope.success({"task_id": task_id, "status": "RUNNING"})
+
+
+class BatchZipRequest(BaseModel):
+    video_paths: List[str] = Field(default_factory=list)
+    archive_name: str = Field(default="batch-remake-outputs.zip")
+
+
+@router.post("/batch/zip")
+async def export_batch_zip(body: BatchZipRequest) -> FileResponse:
+    """Package multiple completed MP4 videos into a single downloadable ZIP archive."""
+    valid_files = [Path(p).resolve() for p in body.video_paths if p and os.path.isfile(p)]
+    if not valid_files:
+        raise StudioBaseError(ErrorCode.INVALID_PARAM, "没有可打包下载的成品视频文件")
+
+    zip_dir = REPO_ROOT / "storage" / "temp"
+    zip_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = zip_dir / f"batch-{uuid.uuid4().hex[:8]}.zip"
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as zf:
+        for idx, fpath in enumerate(valid_files, start=1):
+            arcname = f"{idx:02d}_{fpath.name}"
+            zf.write(fpath, arcname=arcname)
+
+    return FileResponse(
+        path=str(zip_path),
+        media_type="application/zip",
+        filename=body.archive_name or "batch-remake-outputs.zip",
+    )
 
 
 @router.get("/tasks/{task_id}", response_model=ResultEnvelope[Dict[str, Any]])

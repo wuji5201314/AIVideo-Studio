@@ -87,8 +87,8 @@ export const AvatarStudioView: React.FC<AvatarStudioViewProps> = ({ initialToolI
         >
           <Layers className="w-3.5 h-3.5" />
           <div className="text-left">
-            <div className="font-semibold">批量矩阵数字人口播</div>
-            <div className="text-[10px] opacity-80">AI 主题裂变 · 多主播批量直出</div>
+            <div className="font-semibold">批量链接 / 原视频复刻</div>
+            <div className="text-[10px] opacity-80">多链接·多MP4批量换人 · 一键打包ZIP</div>
           </div>
         </button>
       </div>
