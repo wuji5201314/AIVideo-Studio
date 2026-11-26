@@ -27,6 +27,7 @@ from controllers import (
     StudioBaseError,
     asset_router,
     avatar_router,
+    draft_router,
     operator_router,
     settings_router,
     workflow_router,
@@ -75,6 +76,7 @@ app.include_router(operator_router)
 app.include_router(asset_router)
 app.include_router(avatar_router)
 app.include_router(settings_router)
+app.include_router(draft_router)
 
 
 @app.get("/health", response_model=ResultEnvelope[dict])

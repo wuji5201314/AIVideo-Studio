@@ -232,6 +232,27 @@ export const ApiSettingsDrawer: React.FC<ApiSettingsDrawerProps> = ({ open, onCl
                 />
               </div>
             </div>
+
+            <div className="p-3 rounded-lg border border-border-subtle bg-canvas space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-ink">
+                <span>Pexels 免费高清实拍素材库 & 剪映草稿目录</span>
+                {form.pexels_ready && <span className="text-[10px] text-apple-green">Pexels 已就绪</span>}
+              </div>
+              <input
+                type="password"
+                value={form.pexels_api_key || ""}
+                onChange={(e) => setForm({ ...form, pexels_api_key: e.target.value })}
+                placeholder="免费 Pexels API Key（pexels.com/api 免费申请，自动配 1080P 实拍画面）"
+                className="w-full text-xs p-2 rounded border border-border-subtle bg-surface text-ink"
+              />
+              <input
+                type="text"
+                value={form.jianying_drafts_dir || ""}
+                onChange={(e) => setForm({ ...form, jianying_drafts_dir: e.target.value })}
+                placeholder="剪映草稿目录（留空则自动识别本机剪映 Pro 默认草稿路径）"
+                className="w-full text-[11px] p-2 rounded border border-border-subtle bg-surface text-ink"
+              />
+            </div>
           </div>
 
           {testResult && (

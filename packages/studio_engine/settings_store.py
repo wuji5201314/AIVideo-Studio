@@ -61,6 +61,10 @@ class CloudApiSettings(BaseModel):
     video_api_key: str = Field(default="", description="Optional override API key for Video Gen")
     video_model: str = Field(default="Wan-AI/Wan2.2-T2V-A14B", description="Video model name")
 
+    # Free HD Stock Footage (Pexels) & Local JianYing Drafts Folder
+    pexels_api_key: str = Field(default="", description="Free Pexels API key for HD stock footage")
+    jianying_drafts_dir: str = Field(default="", description="Optional custom JianYing Pro drafts folder path")
+
     def resolve(self, kind: str) -> tuple[str, str, str]:
         """Return effective (base_url, api_key, model) for llm | image | video."""
         if kind == "llm":
@@ -176,7 +180,7 @@ class SettingsStore:
     def save_cloud_api_settings(self, patch: Dict[str, Any]) -> CloudApiSettings:
         """Merge partial updates into persisted CloudApiSettings (preserving masked keys)."""
         current = self.get_cloud_api_settings().model_dump()
-        secret_fields = {"global_api_key", "llm_api_key", "image_api_key", "video_api_key"}
+        secret_fields = {"global_api_key", "llm_api_key", "image_api_key", "video_api_key", "pexels_api_key"}
         for k, v in patch.items():
             if k in current and v is not None:
                 if k in secret_fields and isinstance(v, str) and v.startswith("sk-***"):
@@ -201,7 +205,7 @@ class SettingsStore:
     def mask_cloud_api(settings: CloudApiSettings) -> Dict[str, Any]:
         """Return API-safe dict with masked secrets and readiness flags."""
         data = settings.model_dump()
-        for field in ("global_api_key", "llm_api_key", "image_api_key", "video_api_key"):
+        for field in ("global_api_key", "llm_api_key", "image_api_key", "video_api_key", "pexels_api_key"):
             raw = data.get(field) or ""
             data[f"has_{field}"] = bool(raw.strip())
             if len(raw) > 8:
@@ -214,4 +218,5 @@ class SettingsStore:
         data["llm_ready"] = bool(llm_u and llm_k)
         data["image_ready"] = bool(img_u and img_k)
         data["video_ready"] = bool(vid_u and vid_k)
+        data["pexels_ready"] = bool((settings.pexels_api_key or "").strip())
         return data

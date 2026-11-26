@@ -11,8 +11,10 @@ import {
   Loader2,
   Film,
   Image as ImageIcon,
+  Search,
+  Scissors,
 } from "lucide-react";
-import { api, getStreamUrl } from "../../services/api";
+import { api, getStreamUrl, type JianYingExportResult, type PexelsVideoItem } from "../../services/api";
 
 interface TemplatePreset {
   id: "store_tour" | "knowledge_card" | "product_promo" | "photo_story";
@@ -87,6 +89,14 @@ export const TemplateVideoStudioView: React.FC = () => {
   const [uploadedMedia, setUploadedMedia] = useState<Array<{ path: string; name: string; kind: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+
+  // Pexels HD Stock Search & JianYing Draft Export
+  const [pexelsQuery, setPexelsQuery] = useState("modern furniture");
+  const [searchingPexels, setSearchingPexels] = useState(false);
+  const [pexelsList, setPexelsList] = useState<PexelsVideoItem[]>([]);
+  const [downloadingPexelsId, setDownloadingPexelsId] = useState<string>("");
+  const [exportingDraft, setExportingDraft] = useState(false);
+  const [draftResult, setDraftResult] = useState<JianYingExportResult | null>(null);
 
   const [jobs, setJobs] = useState<BatchTemplateJob[]>([]);
   const [runningAll, setRunningAll] = useState(false);
@@ -178,6 +188,63 @@ export const TemplateVideoStudioView: React.FC = () => {
 
   const handleAddToBatch = () => {
     setJobs((prev) => [...prev, buildCurrentJob()]);
+  };
+
+  const handleSearchPexels = async () => {
+    if (!pexelsQuery.trim()) return;
+    setSearchingPexels(true);
+    setErrorMsg("");
+    try {
+      const items = await api.searchPexelsVideos(pexelsQuery.trim(), aspectRatio === "9:16" ? "portrait" : "landscape");
+      setPexelsList(items);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSearchingPexels(false);
+    }
+  };
+
+  const handleUsePexelsVideo = async (item: PexelsVideoItem) => {
+    setDownloadingPexelsId(item.id);
+    setErrorMsg("");
+    try {
+      const dl = await api.downloadPexelsVideo(item.download_url, `Pexels_${item.id}`);
+      setUploadedMedia((prev) => [...prev, { path: dl.file_path, name: `Pexels_${item.id}.mp4`, kind: "video" }]);
+    } catch (err) {
+      setErrorMsg("下载 Pexels 素材失败: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setDownloadingPexelsId("");
+    }
+  };
+
+  const handleExportTemplateToJianYing = async () => {
+    setExportingDraft(true);
+    setErrorMsg("");
+    try {
+      const tts = await api.executeOperator<{ audio_path: string; duration_sec: number }>("op_voice_tts", {
+        text: script.trim() || title.trim(),
+        voice_name: voiceName,
+      });
+      const res = await api.exportJianYingDraft({
+        project_name: title.trim() || "模板成片草稿",
+        aspect_ratio: aspectRatio,
+        write_to_jianying_dir: true,
+        shots: [
+          {
+            headline: title.trim(),
+            narration: script.trim(),
+            visual_path: uploadedMedia[0]?.path,
+            audio_path: tts?.audio_path,
+            duration_sec: tts?.duration_sec || 6.0,
+          },
+        ],
+      });
+      setDraftResult(res);
+    } catch (err) {
+      setErrorMsg("导出剪映草稿失败: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExportingDraft(false);
+    }
   };
 
   const handleRunBatch = async () => {
@@ -273,9 +340,48 @@ export const TemplateVideoStudioView: React.FC = () => {
               </div>
             ) : (
               <div className="text-[11px] text-ink-muted bg-canvas p-2.5 rounded-lg border border-dashed border-border-subtle">
-                未上传时将自动使用模板专属高质感渐变背景；上传实拍视频或产品照片将自动铺底并叠加模板动效。
+                未上传时将自动使用模板底图；建议上传实拍视频/照片，或在下方一键检索 Pexels 免费 1080P 高清实拍画面。
               </div>
             )}
+
+            {/* Pexels Free HD Stock Search */}
+            <div className="pt-2 border-t border-border-subtle space-y-2">
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={pexelsQuery}
+                  onChange={(e) => setPexelsQuery(e.target.value)}
+                  placeholder="搜 Pexels 免费 1080P 实拍（如 modern furniture, coffee）"
+                  className="flex-1 text-[11px] p-1.5 rounded border border-border-subtle bg-canvas text-ink"
+                />
+                <button
+                  onClick={handleSearchPexels}
+                  disabled={searchingPexels}
+                  className="px-2.5 py-1.5 rounded bg-surface-muted border border-border-subtle text-[11px] font-semibold text-ink flex items-center gap-1 cursor-pointer"
+                >
+                  <Search className="w-3 h-3 text-apple-blue" />
+                  <span>{searchingPexels ? "搜索中..." : "搜免费实拍"}</span>
+                </button>
+              </div>
+              {pexelsList.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5 max-h-[140px] overflow-y-auto">
+                  {pexelsList.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleUsePexelsVideo(item)}
+                      disabled={downloadingPexelsId === item.id}
+                      className="relative rounded overflow-hidden border border-border-subtle hover:border-apple-blue group cursor-pointer h-20 bg-black"
+                      title={`点击导入 Pexels 高清视频 (${item.duration}s)`}
+                    >
+                      <img src={item.thumbnail} alt={item.author} className="w-full h-full object-cover opacity-90 group-hover:opacity-100" />
+                      <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[9px] px-1 rounded">
+                        {downloadingPexelsId === item.id ? "导入中" : `${item.duration}s`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 3. Content & Voice */}
@@ -373,9 +479,35 @@ export const TemplateVideoStudioView: React.FC = () => {
                 onClick={handleInstantGenerate}
                 className="flex-1 py-2.5 rounded-lg bg-ink text-surface text-xs font-semibold shadow-soft flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5 text-apple-blue" /> 立即按模板生成 MP4
+                <Sparkles className="w-3.5 h-3.5 text-apple-blue" /> 立即生成 MP4
               </button>
             </div>
+
+            <button
+              onClick={handleExportTemplateToJianYing}
+              disabled={exportingDraft}
+              className="w-full py-2.5 rounded-lg bg-apple-green text-surface text-xs font-semibold shadow-soft flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Scissors className="w-3.5 h-3.5" />
+              <span>{exportingDraft ? "正在生成剪映多轨草稿..." : "一键导出剪映草稿（含配音 + 字幕）"}</span>
+            </button>
+
+            {draftResult && (
+              <div className="p-2.5 rounded-lg bg-apple-green/10 border border-apple-green/30 text-[11px] text-apple-green space-y-1">
+                <div className="font-semibold">
+                  {draftResult.written_to_jianying
+                    ? `✓ 已写入剪映草稿目录（${draftResult.draft_name}），打开剪映即可编辑！`
+                    : `✓ 剪映草稿已打包（${draftResult.draft_name} · ${draftResult.track_summary}）`}
+                </div>
+                <a
+                  href={api.getJianYingZipUrl(draftResult.zip_path)}
+                  download={`${draftResult.draft_name}.zip`}
+                  className="underline font-semibold inline-flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3" /> 下载便携剪映草稿 ZIP
+                </a>
+              </div>
+            )}
           </div>
         </div>
 

@@ -180,9 +180,31 @@ export interface CloudApiSettings {
   video_base_url: string;
   video_api_key: string;
   video_model: string;
+  pexels_api_key?: string;
+  jianying_drafts_dir?: string;
   llm_ready?: boolean;
   image_ready?: boolean;
   video_ready?: boolean;
+  pexels_ready?: boolean;
+}
+
+export interface JianYingExportResult {
+  draft_name: string;
+  draft_dir: string;
+  zip_path: string;
+  written_to_jianying: boolean;
+  total_duration_sec: number;
+  track_summary: string;
+}
+
+export interface PexelsVideoItem {
+  id: string;
+  duration: number;
+  width: number;
+  height: number;
+  thumbnail: string;
+  download_url: string;
+  author: string;
 }
 
 export const API_BASE =
@@ -379,5 +401,41 @@ export const api = {
   testCloudApiConnection: () =>
     request<{ ok: boolean; message: string; latency_ms: number }>("/api/v2/settings/api/test", {
       method: "POST",
+    }),
+
+  // JianYing Pro Draft Export & Pexels Free HD Stock Footage
+  getJianYingInfo: () =>
+    request<{ detected: boolean; drafts_dir: string }>("/api/v2/drafts/jianying/info"),
+
+  exportJianYingDraft: (payload: {
+    project_name: string;
+    aspect_ratio?: string;
+    fps?: number;
+    write_to_jianying_dir?: boolean;
+    shots: Array<{
+      headline?: string;
+      narration?: string;
+      visual_path?: string;
+      audio_path?: string;
+      duration_sec?: number;
+    }>;
+  }) =>
+    request<JianYingExportResult>("/api/v2/drafts/jianying/export", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getJianYingZipUrl: (zipPath: string) =>
+    `${API_BASE}/api/v2/drafts/jianying/download?path=${encodeURIComponent(zipPath)}`,
+
+  searchPexelsVideos: (query: string, orientation = "portrait") =>
+    request<PexelsVideoItem[]>(
+      `/api/v2/stock/pexels/search?query=${encodeURIComponent(query)}&orientation=${encodeURIComponent(orientation)}`
+    ),
+
+  downloadPexelsVideo: (downloadUrl: string, title = "Pexels素材") =>
+    request<{ file_path: string; filename: string; size_bytes: number }>("/api/v2/stock/pexels/download", {
+      method: "POST",
+      body: JSON.stringify({ download_url: downloadUrl, title }),
     }),
 };

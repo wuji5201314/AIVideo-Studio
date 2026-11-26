@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
-import { Download, FolderArchive, CheckCircle2, Film, Sparkles, Sliders, Volume2 } from "lucide-react";
-import { api, getStreamUrl } from "../../../services/api";
+import { Download, FolderArchive, CheckCircle2, Film, Sparkles, Sliders, Volume2, Scissors } from "lucide-react";
+import { api, getStreamUrl, type JianYingExportResult } from "../../../services/api";
 import type { ShotItem } from "../../../services/api";
 
 interface ExportStageViewProps {
@@ -14,6 +14,8 @@ export const ExportStageView: React.FC<ExportStageViewProps> = ({ shots, project
   const [exportFps, setExportFps] = useState<number>(30);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isExportingDraft, setIsExportingDraft] = useState<boolean>(false);
+  const [jianyingResult, setJianyingResult] = useState<JianYingExportResult | null>(null);
   const [exportNotice, setExportNotice] = useState<string>("");
   const [, setIsPlayingAll] = useState<boolean>(false);
   const [exportedFilePath, setExportedFilePath] = useState<string | null>(null);
@@ -77,6 +79,36 @@ export const ExportStageView: React.FC<ExportStageViewProps> = ({ shots, project
       setExportNotice("导出异常：" + String(err));
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleExportJianYing = async () => {
+    setIsExportingDraft(true);
+    setExportNotice("正在通过开源 pyJianYingDraft 组装多轨视频/配音/抖音字幕草稿...");
+    try {
+      const res = await api.exportJianYingDraft({
+        project_name: projectTitle || "AIVideo_智能成片草稿",
+        aspect_ratio: "9:16",
+        fps: exportFps,
+        write_to_jianying_dir: true,
+        shots: shots.map((s) => ({
+          headline: s.headline,
+          narration: s.narration,
+          visual_path: s.visual_path,
+          audio_path: s.audio_path,
+          duration_sec: s.est_duration || 4.0,
+        })),
+      });
+      setJianyingResult(res);
+      setExportNotice(
+        res.written_to_jianying
+          ? `✓ 已直接写入本机剪映草稿目录（${res.draft_name}）！打开剪映即可直接看到工程并套用花字特效（${res.track_summary}）。`
+          : `✓ 剪映草稿已打包生成（${res.draft_name} · ${res.track_summary}），点击下方按钮下载 ZIP 解压到剪映草稿目录即可打开。`
+      );
+    } catch (err) {
+      setExportNotice("导出剪映草稿失败：" + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsExportingDraft(false);
     }
   };
 
@@ -272,6 +304,26 @@ export const ExportStageView: React.FC<ExportStageViewProps> = ({ shots, project
               <Sparkles className={`w-4 h-4 text-apple-blue ${isExporting ? "animate-spin" : ""}`} />
               <span>{isExporting ? "正在渲染全片成片..." : "立即合成并导出成片"}</span>
             </button>
+
+            <button
+              onClick={handleExportJianYing}
+              disabled={isExportingDraft || shots.length === 0}
+              className="w-full py-2.5 bg-apple-green hover:bg-apple-green/90 text-surface text-xs font-semibold rounded-md shadow-soft flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+            >
+              <Scissors className="w-4 h-4" />
+              <span>{isExportingDraft ? "正在生成剪映多轨草稿..." : "一键导出剪映 Pro 草稿（打开剪映秒加特效）"}</span>
+            </button>
+
+            {jianyingResult?.zip_path && (
+              <a
+                href={api.getJianYingZipUrl(jianyingResult.zip_path)}
+                download={`${jianyingResult.draft_name}.zip`}
+                className="w-full py-2 px-3 bg-apple-green/10 text-apple-green border border-apple-green/30 text-xs font-semibold rounded-md flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>下载便携剪映草稿包 ({jianyingResult.draft_name}.zip)</span>
+              </a>
+            )}
 
             <div className="flex gap-2">
               <button

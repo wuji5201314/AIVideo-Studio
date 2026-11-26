@@ -2,6 +2,7 @@
 
 from controllers.asset_routes import router as asset_router
 from controllers.avatar_routes import router as avatar_router
+from controllers.draft_routes import router as draft_router
 from controllers.envelope import ErrorCode, ResultEnvelope, StudioBaseError
 from controllers.operator_routes import router as operator_router
 from controllers.settings_routes import router as settings_router
@@ -16,4 +17,5 @@ __all__ = [
     "asset_router",
     "avatar_router",
     "settings_router",
+    "draft_router",
 ]

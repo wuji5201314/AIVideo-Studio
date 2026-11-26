@@ -31,6 +31,8 @@ class CloudApiSettingsPatch(BaseModel):
     video_base_url: Optional[str] = None
     video_api_key: Optional[str] = None
     video_model: Optional[str] = None
+    pexels_api_key: Optional[str] = None
+    jianying_drafts_dir: Optional[str] = None
 
 
 @router.get("/api", response_model=ResultEnvelope[Dict[str, Any]])
